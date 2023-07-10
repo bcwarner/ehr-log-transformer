@@ -6,7 +6,7 @@ import joblib
 import torch
 import yaml
 from lightning import pytorch as pl
-from torch.utils.data import ConcatDataset, random_split, ChainDataset
+from torch.utils.data import ConcatDataset, random_split, ChainDataset, Subset
 from tqdm import tqdm
 
 from Sophia.sophia import SophiaG
@@ -237,19 +237,20 @@ class EHRAuditDataModule(pl.LightningDataModule):
         torch.manual_seed(config["random_seed"])
         self.seed = config["random_seed"]
 
-        # Assign the datasets into different arrays of datasets to be chained together.
-        # Shuffling will be done after separation of providers.
-        train_indices, val_indices, test_indices = random_split(
-            range(len(datasets)),
+        # Concatenate the datasets together. This is done differently than the mainline branch.
+        cdsets = ConcatDataset(datasets)
+        # Split the dataset into train, val, test
+        train_indices, val_indices, test_indices = torch.utils.data.random_split(
+            range(len(cdsets)),
             [
                 self.config["train_split"],
                 self.config["val_split"],
                 1 - self.config["train_split"] - self.config["val_split"],
             ],
         )
-        self.train_dataset = ConcatDataset([datasets[i] for i in train_indices])
-        self.val_dataset = ConcatDataset([datasets[i] for i in val_indices])
-        self.test_dataset = ConcatDataset([datasets[i] for i in test_indices])
+        self.train_dataset = Subset(cdsets, train_indices)
+        self.val_dataset = Subset(cdsets, val_indices)
+        self.test_dataset = Subset(cdsets, test_indices)
         self.num_workers = 2 if not self.debug else 1  # os.cpu_count()
         print(f"Using {self.num_workers} workers for data loading.")
         print(

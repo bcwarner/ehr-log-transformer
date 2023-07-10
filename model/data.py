@@ -59,6 +59,7 @@ class EHRAuditDataset(Dataset):
         timestamp_col: str = "ACCESS_TIME",
         timestamp_sort_cols: List[str] = ["ACCESS_TIME", "ACCESS_INSTANT"],
         event_type_cols: List[str] = ["METRIC_NAME"],
+        prov_col: str = "USER_ID",
         log_name: str = None,
         vocab: EHRVocab = None,
         timestamp_spaces: List[float] = None,
@@ -82,10 +83,11 @@ class EHRAuditDataset(Dataset):
         self.should_tokenize = should_tokenize
         self.timestamp_sort_cols = timestamp_sort_cols
         self.max_length = max_length
+        self.prov_col = prov_col
 
         if self.timestamp_spaces is None and self.should_tokenize is True:
             raise ValueError("Tokenization depends on timestamp binning.")
-        self.cache = cache
+        self.cache = cache + "4tokens"
 
     def load(self):
         """
@@ -113,7 +115,12 @@ class EHRAuditDataset(Dataset):
             )
 
         # Delete all columns not included
-        df = df[self.event_type_cols + [self.user_col] + self.timestamp_sort_cols]
+        df = df[
+            self.event_type_cols
+            + [self.user_col]
+            + self.timestamp_sort_cols
+            + [self.prov_col]
+        ]
 
         # Convert the timestamp to time deltas.
         # If not in seconds, convert to seconds.
@@ -194,7 +201,11 @@ class EHRAuditDataset(Dataset):
 
         if self.should_tokenize:
             # Order from least likely to be zero to most likely to be zero.
-            tokenized_cols = self.event_type_cols + [self.user_col, self.timestamp_col]
+            tokenized_cols = self.event_type_cols + [
+                self.user_col,
+                self.timestamp_col,
+                self.prov_col,
+            ]
             tokenized_seqs = []
             chunk_size = self.max_length
             chunk_size -= chunk_size % len(tokenized_cols)

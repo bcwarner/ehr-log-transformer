@@ -151,7 +151,10 @@ class EHRAuditGPT2(GPT2LMHeadModel):
             # Is this actually faster?
             # losses = [_compute_loss(field_idx) for field_idx in range(3)]
             total_lm_loss = (
-                _compute_loss(0) + _compute_loss(1) + _compute_loss(2)
+                _compute_loss(0)
+                + _compute_loss(1)
+                + _compute_loss(2)
+                + _compute_loss(3)
             )  # sum(losses)
 
             # Append the loss to the end of the outputs.

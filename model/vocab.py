@@ -164,6 +164,13 @@ if __name__ == "__main__":
 
     categorical_column_opts["ACCESS_TIME"] = [str(i) for i in range(len(bins))]
 
+    # USER_ID
+    # Get the list of providers from the list of directories in the data directory.
+    user_ids = os.listdir(
+        os.path.normpath(os.path.join(path_prefix, config["audit_log_path"]))
+    )
+    categorical_column_opts["USER_ID"] = user_ids
+
     # Create the vocab
     vocab = EHRVocab(categorical_column_opts, vocab_path=vocab_path)
     vocab.save()
