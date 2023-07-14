@@ -29,6 +29,7 @@ class EHRAuditGPT2(GPT2LMHeadModel):
                 ignore_index=-100,
                 label_smoothing=0.1,
             ),
+            torch.nn.CrossEntropyLoss(ignore_index=-100),
         ]
         self.field_ct = len(field_names)
         self.col_ids = list(range(self.field_ct))
@@ -57,6 +58,14 @@ class EHRAuditGPT2(GPT2LMHeadModel):
                 self.col_ids_labels[field_idx].append(
                     self.col_ids_labels[field_idx][-1] + len(field_names)
                 )
+
+            if self.col_ids_labels[field_idx][-1] >= self.seq_len - 1:
+                # This maps two inputs to the last column, which is not correct.
+                # But this gives a preliminary look into the performance of a physician token.
+                self.col_ids_labels[field_idx][-1] = self.col_ids_labels[field_idx][-2]
+
+            if self.col_ids[field_idx][-1] >= self.seq_len - 1:
+                self.col_ids[field_idx][-1] = self.col_ids[field_idx][-2]
 
             self.global_ids_min[field_idx] = self.vocab.field_ids[field_name][0]
             self.global_ids_max[field_idx] = self.vocab.field_ids[field_name][-1] + 1
