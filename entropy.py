@@ -31,12 +31,14 @@ class Experiment:
         config: dict,
         path_prefix: str,
         vocab: EHRVocab,
+        dm: EHRAuditDataModule,
         *args,
         **kwargs,
     ):
         self.config = config
         self.path_prefix = path_prefix
         self.vocab = vocab
+        self.dm = dm
 
     def on_row(
         self,
@@ -45,6 +47,7 @@ class Experiment:
         row_loss=None,
         prev_row_loss=None,
         batch_no=None,
+        batch_idx=None,
     ):
         pass
 
@@ -92,6 +95,7 @@ class EntropySwitchesExperiment(Experiment):
         prev_row=None,
         prev_row_loss=None,
         batch_no=None,
+        batch_idx=None,
     ):
         if prev_row is None:
             return
@@ -264,6 +268,7 @@ class SecureChatEntropy(Experiment):
         row_loss=None,
         prev_row_loss=None,
         batch_no=None,
+        batch_idx=None,
     ):
         # Get the METRIC_NAME token for this row.
         metric_name_token = row[METRIC_NAME_COL]
@@ -348,6 +353,7 @@ class PatientsSessionsEntropyExperiment(Experiment):
         row_loss=None,
         prev_row_loss=None,
         batch_no=None,
+        batch_idx=None,
     ):
         # Get the patient ID
         patient_id = row[PAT_ID_COL]
@@ -431,7 +437,13 @@ class TimeEntropyExperiment(Experiment):
         return True
 
     def on_row(
-        self, row=None, prev_row=None, row_loss=None, prev_row_loss=None, batch_no=None
+        self,
+        row=None,
+        prev_row=None,
+        row_loss=None,
+        prev_row_loss=None,
+        batch_no=None,
+        batch_idx=None,
     ):
         # Get the time delta
         time_delta = row[ACCESS_TIME_COL]
@@ -522,6 +534,46 @@ class TimeEntropyExperiment(Experiment):
                 )
             )
         )
+
+
+class DayLevelPatientEntropyExperiment(Experiment):
+    """
+    Measures the entropy as a function of the number of unique patients seen in a day.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._samples_seen = 0
+        self.entropies_by_batch_idx = defaultdict(list)
+
+    def on_batch(self, sequence):
+        self._samples_seen += 1
+        return True
+
+    def on_row(
+        self,
+        row=None,
+        prev_row=None,
+        row_loss=None,
+        prev_row_loss=None,
+        batch_no=None,
+        batch_idx=None,
+    ):
+        self.entropies_by_batch_idx[batch_idx].append(row_loss)
+
+    def on_finish(self):
+        # Map the batch indices to the provider => day on which the batch occurred
+        day_entropies = defaultdict(lambda: defaultdict(list))
+        for batch_idx, entropies in self.entropies_by_batch_idx.items():
+            # Get the day on which this batch occurred
+            day = None
+            provider = None
+            # Append the entropy to day_entropies
+            day_entropies[provider][day].extend(entropies)
+
+        # Now get the number of patients per day
+        # Divide the average entropy by the number of patients
+        # Plot the average entropy as a function of the number of patients
 
 
 if __name__ == "__main__":
@@ -662,7 +714,7 @@ if __name__ == "__main__":
     batches_seen = 0
     batches_skipped = 0
     pbar = tqdm(total=max_samples, position=len(experiments), desc="Batches Seen")
-    for batch in dl:
+    for batch_idx, batch in enumerate(dl):
         input_ids, labels = batch
         # Sliding window over the sequence
         with torch.no_grad():
@@ -744,7 +796,8 @@ if __name__ == "__main__":
                             row_loss=avg_loss,
                             prev_row=prev_row,
                             prev_row_loss=prev_row_loss,
-                            batch_no=batches_seen,
+                            batch_no=batches_seen,  # Batch count seen
+                            batch_idx=batch_idx,  # Actual index of batch in dataloader
                         )
                         exp_pbar[j].n = experiments[j].samples_seen()
                         exp_pbar[j].refresh()
