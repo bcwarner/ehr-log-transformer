@@ -17,7 +17,7 @@ from model.vocab import EHRVocab
 def collate_fn(batch, n_positions=1024):
     input_ids_col = []
     labels_col = []
-    for input_ids in batch:
+    for input_ids, session_id in batch:
         pad_pos_count = n_positions - input_ids.size(0)
         # Pad to max length or crop to max length
         if input_ids.size(0) < n_positions:

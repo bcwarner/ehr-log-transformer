@@ -68,6 +68,7 @@ class EHRAuditDataset(Dataset):
     ):
         self.seqs = []
         self.len = None
+        self.session_times = None
         self.provider = os.path.basename(root_dir)
         self.session_sep_min = session_sep_min
         self.shift_sep_min = shift_sep_min
@@ -127,6 +128,8 @@ class EHRAuditDataset(Dataset):
         df = df.drop(columns=set(self.timestamp_sort_cols) - {self.timestamp_col})
 
         # Time deltas, (ignore negative values, these will be quantized away)
+        # Keep a temp copy of the original timestamp_col for later.
+        df["temp_time"] = df[self.timestamp_col].copy()
         df.loc[:, self.timestamp_col] = df.loc[:, self.timestamp_col].copy().diff()
 
         # Set beginning of shift to 0, otherwise it's nan.
@@ -174,6 +177,13 @@ class EHRAuditDataset(Dataset):
 
         # Also convert the events to the corresponding vocab value.
         self.seqs = seqs
+
+        # Iterate through each session, and generate a map of session # => time for later
+        self.session_times = {}
+        for idx in range(len(self.seqs)):
+            s = self.seqs[idx]
+            self.session_times[idx] = s.loc[:, "temp_time"]
+            self.seqs[idx] = s.drop(columns=["temp_time"])
 
         # TODO: Ensure that the vocab responds to timestamp_bins.spacing
         if self.timestamp_spaces is not None:
@@ -250,9 +260,14 @@ class EHRAuditDataset(Dataset):
             ) as f:
                 pickle.dump(self.len, f)
 
+            with open(
+                os.path.normpath(os.path.join(cache_path, "session_times.pkl")), "wb"
+            ) as f:
+                pickle.dump(self.session_times, f)
+
             torch.save(self.seqs, os.path.normpath(os.path.join(cache_path, "seqs.pt")))
 
-    def load_from_cache(self, length=True, seqs=False):
+    def load_from_cache(self, length=True, seqs=False, session_times=False):
         """
         Load the dataset from a cached file.
         Deliberately only load parts as needed.
@@ -275,11 +290,20 @@ class EHRAuditDataset(Dataset):
                 os.path.normpath(os.path.join(cache_path, "seqs.pt"))
             )
 
+        if session_times:
+            with open(
+                os.path.normpath(os.path.join(cache_path, "session_times.pkl")), "rb"
+            ) as f:
+                try:
+                    self.session_times = pickle.load(f)
+                except EOFError:
+                    self.session_times = {}
+
     def __getitem__(self, item):
         if self.seqs == [] and os.path.exists(
             os.path.normpath(os.path.join(self.root_dir, self.cache))
         ):
-            self.load_from_cache(seqs=True)
+            self.load_from_cache(seqs=True, session_times=True)
         return self.seqs[item]
 
     def __len__(self):
