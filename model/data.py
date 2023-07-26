@@ -12,6 +12,13 @@ import pandas as pd
 from model.vocab import EHRVocab
 
 
+def session_hash(session: torch.Tensor):
+    """
+    Hashes a session (list of events) into a unique integer.
+    """
+    return hash(tuple(session.tolist()))
+
+
 def timestamp_space_calculation(timestamp_spaces: List[str]):
     timestamp_spaces_fn = getattr(np, timestamp_spaces[0])
     timestamp_spaces_float = [
@@ -83,6 +90,8 @@ class EHRAuditDataset(Dataset):
         self.should_tokenize = should_tokenize
         self.timestamp_sort_cols = timestamp_sort_cols
         self.max_length = max_length
+        self.hash_to_provider_sequence = {}
+        self.provider_sequence_to_metadata = {}
 
         if self.timestamp_spaces is None and self.should_tokenize is True:
             raise ValueError("Tokenization depends on timestamp binning.")
@@ -124,8 +133,6 @@ class EHRAuditDataset(Dataset):
 
         # Sort by timestamp
         df = df.sort_values(by=self.timestamp_sort_cols)
-        # Delete the timestamp_sort_cols except for the timestamp_col
-        df = df.drop(columns=set(self.timestamp_sort_cols) - {self.timestamp_col})
 
         # Time deltas, (ignore negative values, these will be quantized away)
         # Keep a temp copy of the original timestamp_col for later.
@@ -178,12 +185,17 @@ class EHRAuditDataset(Dataset):
         # Also convert the events to the corresponding vocab value.
         self.seqs = seqs
 
-        # Iterate through each session, and generate a map of session # => time for later
-        self.session_times = {}
+        # Metadata generation
+        provider_sequence_to_metadata = {}
         for idx in range(len(self.seqs)):
-            s = self.seqs[idx]
-            self.session_times[idx] = s.loc[:, "temp_time"]
-            self.seqs[idx] = s.drop(columns=["temp_time"])
+            seq = self.seqs[idx]
+            provider_sequence_to_metadata[idx] = {
+                "date": seq[self.timestamp_col].iloc[0],
+            }
+
+            # Delete the timestamp_sort_cols except for the timestamp_col
+            seq = seq.drop(columns=set(self.timestamp_sort_cols) - {self.timestamp_col})
+            self.seqs[idx] = seq
 
         # TODO: Ensure that the vocab responds to timestamp_bins.spacing
         if self.timestamp_spaces is not None:
@@ -202,6 +214,8 @@ class EHRAuditDataset(Dataset):
                 s[self.timestamp_col] = res.astype(int)
                 self.seqs[idx] = s
 
+        hash_to_provider_sequence = {}
+
         if self.should_tokenize:
             # Order from least likely to be zero to most likely to be zero.
             tokenized_cols = self.event_type_cols + [self.user_col, self.timestamp_col]
@@ -209,7 +223,7 @@ class EHRAuditDataset(Dataset):
             chunk_size = self.max_length
             chunk_size -= chunk_size % len(tokenized_cols)
 
-            for s in self.seqs:  # Iterate each sequence
+            for idx, s in enumerate(self.seqs):  # Iterate each sequence
                 tokenized_example = []
                 for i, row in s.iterrows():  # Iterate each row
                     tokenized_example.extend(
@@ -241,12 +255,18 @@ class EHRAuditDataset(Dataset):
                     # Get rid of the last example if it's not long enough.
                     if len(tokenized_example[-1]) % len(tokenized_cols) != 0:
                         tokenized_example = tokenized_example[:-1]
+
+                    # Convert the hashes of each of these tokenized examples to the index of the provider sequence.
+                    for i, chunk in enumerate(tokenized_example):
+                        hash_to_provider_sequence[session_hash(chunk)] = idx
+
                     tokenized_seqs.extend(tokenized_example)
                 else:
                     tokenized_seqs.append(tokenized_example)
 
             self.seqs = tokenized_seqs
-
+            self.hash_to_provider_sequence = hash_to_provider_sequence
+            self.provider_sequence_to_metadata = provider_sequence_to_metadata
             self.len = len(self.seqs)
 
         if self.cache is not None:
@@ -261,9 +281,17 @@ class EHRAuditDataset(Dataset):
                 pickle.dump(self.len, f)
 
             with open(
-                os.path.normpath(os.path.join(cache_path, "session_times.pkl")), "wb"
+                os.path.normpath(os.path.join(cache_path, "metadata.pkl")), "wb"
             ) as f:
-                pickle.dump(self.session_times, f)
+                pickle.dump(provider_sequence_to_metadata, f)
+
+            with open(
+                os.path.normpath(
+                    os.path.join(cache_path, "hash_to_provider_sequence.pkl")
+                ),
+                "wb",
+            ) as f:
+                pickle.dump(hash_to_provider_sequence, f)
 
             torch.save(self.seqs, os.path.normpath(os.path.join(cache_path, "seqs.pt")))
 

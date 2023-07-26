@@ -31,14 +31,24 @@ class Experiment:
         config: dict,
         path_prefix: str,
         vocab: EHRVocab,
-        dm: EHRAuditDataModule,
         *args,
         **kwargs,
     ):
         self.config = config
         self.path_prefix = path_prefix
         self.vocab = vocab
-        self.dm = dm
+
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+    def _exp_cache_path(self):
+        return os.path.normpath(
+            os.path.join(
+                self.path_prefix,
+                self.config["results_path"],
+                f"exp_cache_{self.__class__.__name__}.pt",
+            )
+        )
 
     def on_row(
         self,
@@ -536,44 +546,24 @@ class TimeEntropyExperiment(Experiment):
         )
 
 
-class DayLevelPatientEntropyExperiment(Experiment):
-    """
-    Measures the entropy as a function of the number of unique patients seen in a day.
-    """
-
-    def __init__(self):
-        super().__init__()
+class DayLevelEntropyExperiment:
+    # Compares the average entropy to the amount of work performed by a provider on a given day.
+    def __init__(self, config, path_prefix, vocab, **kwargs):
+        super().__init__(config, path_prefix, vocab, **kwargs)
+        self.entropies_by_day = defaultdict(list)  # Provider -> Day -> Entropy
+        self.day_count = defaultdict(int)  # Provider -> Day -> Count
         self._samples_seen = 0
-        self.entropies_by_batch_idx = defaultdict(list)
 
     def on_batch(self, sequence):
+        # Perform a lookup to get the day for this session.
+
         self._samples_seen += 1
         return True
 
     def on_row(
-        self,
-        row=None,
-        prev_row=None,
-        row_loss=None,
-        prev_row_loss=None,
-        batch_no=None,
-        batch_idx=None,
+        self, row=None, prev_row=None, row_loss=None, prev_row_loss=None, batch_no=None
     ):
-        self.entropies_by_batch_idx[batch_idx].append(row_loss)
-
-    def on_finish(self):
-        # Map the batch indices to the provider => day on which the batch occurred
-        day_entropies = defaultdict(lambda: defaultdict(list))
-        for batch_idx, entropies in self.entropies_by_batch_idx.items():
-            # Get the day on which this batch occurred
-            day = None
-            provider = None
-            # Append the entropy to day_entropies
-            day_entropies[provider][day].extend(entropies)
-
-        # Now get the number of patients per day
-        # Divide the average entropy by the number of patients
-        # Plot the average entropy as a function of the number of patients
+        pass
 
 
 if __name__ == "__main__":

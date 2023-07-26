@@ -1,4 +1,5 @@
 import os
+from collections import ChainMap
 from functools import partial
 from typing import Any
 
@@ -113,6 +114,7 @@ class EHRAuditDataModule(pl.LightningDataModule):
         n_positions=1024,
         reset_cache=False,
         debug=False,
+        load_metadata=False,
     ):
         super().__init__()
         with open(yaml_config_path) as f:
@@ -122,6 +124,7 @@ class EHRAuditDataModule(pl.LightningDataModule):
         self.n_positions = n_positions
         self.reset_cache = reset_cache
         self.debug = debug
+        self.load_metadata = load_metadata
 
     def prepare_data(self):
         # Itereate through each prefix and determine which one exists, then choose that one.
@@ -186,9 +189,9 @@ class EHRAuditDataModule(pl.LightningDataModule):
                 1  # Empirically faster to load sequentially if not resetting cache
             )
 
-        joblib.Parallel(n_jobs=threads, verbose=1)(
-            joblib.delayed(log_load)(self, provider)
-            for provider in os.listdir(data_path)
+        provider_list = os.listdir(data_path)
+        r = joblib.Parallel(n_jobs=threads, verbose=1)(
+            joblib.delayed(log_load)(self, provider) for provider in provider_list
         )
 
     def setup(self, stage=None):
@@ -203,7 +206,8 @@ class EHRAuditDataModule(pl.LightningDataModule):
             os.path.join(path_prefix, self.config["audit_log_path"])
         )
         datasets = []
-        for provider in os.listdir(data_path):
+        provider_list = os.listdir(data_path)
+        for provider in provider_list:
             # Check there's a cache file (some should not have this, see above)
             prov_path = os.path.normpath(os.path.join(data_path, provider))
             if not os.path.exists(
@@ -232,6 +236,18 @@ class EHRAuditDataModule(pl.LightningDataModule):
             if len(dset) != 0:
                 datasets.append(dset)
             # Should automatically load from cache.
+
+            # Merge all of the metadata mappings together
+            h2psq = [
+                datasets[i].hash_to_provider_sequence for i in range(len(datasets))
+            ]
+            psq2md = [
+                datasets[i].provider_sequence_to_metadata for i in range(len(datasets))
+            ]
+            self.hash_to_provider_sequence = dict(ChainMap(*h2psq))
+            self.provider_sequence_to_metadata = {
+                k: psq2md[i] for i, k in enumerate(provider_list)
+            }
 
         config = yaml.safe_load(open("config.yaml", "r"))
         torch.manual_seed(config["random_seed"])
