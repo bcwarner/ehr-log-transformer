@@ -4,6 +4,7 @@ import inspect
 import os
 import sys
 from collections import defaultdict
+from datetime import datetime
 
 import scipy.stats
 import torch
@@ -15,7 +16,7 @@ from matplotlib import pyplot as plt
 
 from model.model import EHRAuditGPT2
 from model.modules import EHRAuditPretraining, EHRAuditDataModule
-from model.data import timestamp_space_calculation
+from model.data import timestamp_space_calculation, session_hash
 from model.vocab import EHRVocab
 import tikzplotlib
 import numpy as np
@@ -548,21 +549,37 @@ class TimeEntropyExperiment(Experiment):
 
 class DayLevelEntropyExperiment:
     # Compares the average entropy to the amount of work performed by a provider on a given day.
-    def __init__(self, config, path_prefix, vocab, **kwargs):
+    def __init__(self, config, path_prefix, vocab, dm: EHRAuditDataModule, **kwargs):
         super().__init__(config, path_prefix, vocab, **kwargs)
+        self.dm = dm
         self.entropies_by_day = defaultdict(list)  # Provider -> Day -> Entropy
-        self.day_count = defaultdict(int)  # Provider -> Day -> Count
+        self.session_day_count = defaultdict(int)  # Provider -> Day -> Count
+        self.action_day_count = defaultdict(int)  # Provider -> Day -> Count
+        self.batch_date = defaultdict(datetime)
         self._samples_seen = 0
+        self._last_batch_date = None
 
     def on_batch(self, sequence):
-        # Perform a lookup to get the day for this session.
-
+        provider, seq = self.dm.hash_to_provider_sequence(session_hash(sequence))
+        metadata = self.dm.provider_sequence_to_metadata[provider][seq]
+        self._last_batch_date: datetime = metadata["date"]
+        self._last_provider = provider
         self._samples_seen += 1
         return True
 
     def on_row(
         self, row=None, prev_row=None, row_loss=None, prev_row_loss=None, batch_no=None
     ):
+        # Get the time delta
+        day: datetime = self._last_batch_date.date()
+        # Record the entropy of this row
+        self.entropies_by_day[self._last_provider][day].append(row_loss)
+        # Record the # of sessions, not actions.
+        if prev_row is None:
+            self.session_day_count[self._last_provider][day] += 1
+        self.action_day_count[self._last_provider][day] += 1
+
+    def on_finish(self):
         pass
 
 

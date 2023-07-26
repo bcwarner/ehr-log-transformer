@@ -2,6 +2,7 @@
 
 import os
 import pickle
+from collections import defaultdict
 
 import numpy as np
 import torch
@@ -185,7 +186,7 @@ class EHRAuditDataset(Dataset):
         # Also convert the events to the corresponding vocab value.
         self.seqs = seqs
 
-        # Metadata generation
+        # Metadata generation, these will be chained together later.
         provider_sequence_to_metadata = {}
         for idx in range(len(self.seqs)):
             seq = self.seqs[idx]
@@ -258,7 +259,10 @@ class EHRAuditDataset(Dataset):
 
                     # Convert the hashes of each of these tokenized examples to the index of the provider sequence.
                     for i, chunk in enumerate(tokenized_example):
-                        hash_to_provider_sequence[session_hash(chunk)] = idx
+                        hash_to_provider_sequence[session_hash(chunk)] = (
+                            self.provider,
+                            idx,
+                        )
 
                     tokenized_seqs.extend(tokenized_example)
                 else:
