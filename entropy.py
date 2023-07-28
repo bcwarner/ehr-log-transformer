@@ -750,7 +750,7 @@ class DayLevelEntropyExperiment(Experiment):
             plt.plot(x, p(x), "r--", label=f"Trendline (r ={r:.2f})")
             plt.xlabel(f"Number of {variable_name}s")
             plt.ylabel(f"Entropy")
-            plt.title(f"Entropy by Number of {variable_name}s")
+            plt.title(f"Day-Level Entropy by Number of {variable_name}s ")
             plt.legend()
             plt.savefig(
                 os.path.normpath(

@@ -12,12 +12,15 @@ import pandas as pd
 
 from model.vocab import EHRVocab
 
+import hashlib
+
 
 def session_hash(session: torch.Tensor):
     """
     Hashes a session (list of events) into a unique integer.
     """
-    return hash(tuple(session.tolist()))
+    # Do not use built-in python hash, random seed changes every time Python is launched.
+    return hashlib.sha3_512(str(session.tolist()).encode("utf-8")).hexdigest()
 
 
 def timestamp_space_calculation(timestamp_spaces: List[str]):
@@ -263,14 +266,14 @@ class EHRAuditDataset(Dataset):
                 else:  # For when there is only one chunk.
                     tokenized_example = [tokenized_example]
 
-                # Convert the hashes of each of these tokenized examples to the index of the provider sequence.
-                for i, chunk in enumerate(tokenized_example):
-                    hash_to_provider_sequence[session_hash(chunk)] = (
-                        self.provider,
-                        idx,
-                    )
-
                 tokenized_seqs.extend(tokenized_example)
+
+            # Convert the hashes of each of these tokenized examples to the index of the provider sequence.
+            for idx, chunk in enumerate(tokenized_seqs):
+                hash_to_provider_sequence[session_hash(chunk)] = (
+                    self.provider,
+                    idx,
+                )
 
             self.seqs = tokenized_seqs
             self.hash_to_provider_sequence = hash_to_provider_sequence
