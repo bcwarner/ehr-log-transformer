@@ -18,7 +18,7 @@ from model.vocab import EHRVocab
 def collate_fn(batch, n_positions=1024):
     input_ids_col = []
     labels_col = []
-    for input_ids, session_id in batch:
+    for input_ids in batch:
         pad_pos_count = n_positions - input_ids.size(0)
         # Pad to max length or crop to max length
         if input_ids.size(0) < n_positions:
@@ -232,22 +232,21 @@ class EHRAuditDataModule(pl.LightningDataModule):
                 should_tokenize=False,
                 cache=self.config["audit_log_cache"],
                 max_length=self.n_positions,
+                load_metadata=self.load_metadata,
             )
             if len(dset) != 0:
                 datasets.append(dset)
             # Should automatically load from cache.
 
-            # Merge all of the metadata mappings together
-            h2psq = [
-                datasets[i].hash_to_provider_sequence for i in range(len(datasets))
-            ]
-            psq2md = [
-                datasets[i].provider_sequence_to_metadata for i in range(len(datasets))
-            ]
-            self.hash_to_provider_sequence = dict(ChainMap(*h2psq))
-            self.provider_sequence_to_metadata = {
-                k: psq2md[i] for i, k in enumerate(provider_list)
-            }
+        # Merge all of the metadata mappings together
+        h2psq = [datasets[i].hash_to_provider_sequence for i in range(len(datasets))]
+        psq2md = [
+            datasets[i].provider_sequence_to_metadata for i in range(len(datasets))
+        ]
+        self.hash_to_provider_sequence = ChainMap(*h2psq)
+        self.provider_sequence_to_metadata = {
+            k.provider: psq2md[i] for i, k in enumerate(datasets)
+        }
 
         config = yaml.safe_load(open("config.yaml", "r"))
         torch.manual_seed(config["random_seed"])

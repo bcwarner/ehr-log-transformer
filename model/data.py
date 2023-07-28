@@ -73,10 +73,10 @@ class EHRAuditDataset(Dataset):
         should_tokenize: bool = True,
         cache: str = None,
         max_length: int = None,
+        load_metadata: bool = False,
     ):
         self.seqs = []
         self.len = None
-        self.session_times = None
         self.provider = os.path.basename(root_dir)
         self.session_sep_min = session_sep_min
         self.shift_sep_min = shift_sep_min
@@ -93,6 +93,7 @@ class EHRAuditDataset(Dataset):
         self.max_length = max_length
         self.hash_to_provider_sequence = {}
         self.provider_sequence_to_metadata = {}
+        self.load_metadata = load_metadata
 
         if self.timestamp_spaces is None and self.should_tokenize is True:
             raise ValueError("Tokenization depends on timestamp binning.")
@@ -191,11 +192,14 @@ class EHRAuditDataset(Dataset):
         for idx in range(len(self.seqs)):
             seq = self.seqs[idx]
             provider_sequence_to_metadata[idx] = {
-                "date": seq[self.timestamp_col].iloc[0],
+                "date": seq["temp_time"].iloc[0],
             }
 
             # Delete the timestamp_sort_cols except for the timestamp_col
-            seq = seq.drop(columns=set(self.timestamp_sort_cols) - {self.timestamp_col})
+            seq = seq.drop(
+                columns=set(self.timestamp_sort_cols).union({"temp_time"})
+                - {self.timestamp_col}
+            )
             self.seqs[idx] = seq
 
         # TODO: Ensure that the vocab responds to timestamp_bins.spacing
@@ -256,17 +260,17 @@ class EHRAuditDataset(Dataset):
                     # Get rid of the last example if it's not long enough.
                     if len(tokenized_example[-1]) % len(tokenized_cols) != 0:
                         tokenized_example = tokenized_example[:-1]
+                else:  # For when there is only one chunk.
+                    tokenized_example = [tokenized_example]
 
-                    # Convert the hashes of each of these tokenized examples to the index of the provider sequence.
-                    for i, chunk in enumerate(tokenized_example):
-                        hash_to_provider_sequence[session_hash(chunk)] = (
-                            self.provider,
-                            idx,
-                        )
+                # Convert the hashes of each of these tokenized examples to the index of the provider sequence.
+                for i, chunk in enumerate(tokenized_example):
+                    hash_to_provider_sequence[session_hash(chunk)] = (
+                        self.provider,
+                        idx,
+                    )
 
-                    tokenized_seqs.extend(tokenized_example)
-                else:
-                    tokenized_seqs.append(tokenized_example)
+                tokenized_seqs.extend(tokenized_example)
 
             self.seqs = tokenized_seqs
             self.hash_to_provider_sequence = hash_to_provider_sequence
@@ -299,7 +303,7 @@ class EHRAuditDataset(Dataset):
 
             torch.save(self.seqs, os.path.normpath(os.path.join(cache_path, "seqs.pt")))
 
-    def load_from_cache(self, length=True, seqs=False, session_times=False):
+    def load_from_cache(self, length=True, seqs=False):
         """
         Load the dataset from a cached file.
         Deliberately only load parts as needed.
@@ -322,20 +326,25 @@ class EHRAuditDataset(Dataset):
                 os.path.normpath(os.path.join(cache_path, "seqs.pt"))
             )
 
-        if session_times:
+        if self.load_metadata:
             with open(
-                os.path.normpath(os.path.join(cache_path, "session_times.pkl")), "rb"
+                os.path.normpath(os.path.join(cache_path, "metadata.pkl")), "rb"
             ) as f:
-                try:
-                    self.session_times = pickle.load(f)
-                except EOFError:
-                    self.session_times = {}
+                self.provider_sequence_to_metadata = pickle.load(f)
+
+            with open(
+                os.path.normpath(
+                    os.path.join(cache_path, "hash_to_provider_sequence.pkl")
+                ),
+                "rb",
+            ) as f:
+                self.hash_to_provider_sequence = pickle.load(f)
 
     def __getitem__(self, item):
         if self.seqs == [] and os.path.exists(
             os.path.normpath(os.path.join(self.root_dir, self.cache))
         ):
-            self.load_from_cache(seqs=True, session_times=True)
+            self.load_from_cache(seqs=True)
         return self.seqs[item]
 
     def __len__(self):

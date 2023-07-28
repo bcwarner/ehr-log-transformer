@@ -2,6 +2,7 @@
 import argparse
 import inspect
 import os
+import pickle
 import sys
 from collections import defaultdict
 from datetime import datetime
@@ -9,6 +10,7 @@ from datetime import datetime
 import scipy.stats
 import torch
 import yaml
+from matplotlib.axes import Axes
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from tabulate import tabulate
@@ -21,6 +23,7 @@ from model.vocab import EHRVocab
 import tikzplotlib
 import numpy as np
 
+# Fyi: this is a quick-and-dirty way of id'ing the columns, will need to be changed if the tabularization changes
 METRIC_NAME_COL = 0
 PAT_ID_COL = 1
 ACCESS_TIME_COL = 2
@@ -38,9 +41,10 @@ class Experiment:
         self.config = config
         self.path_prefix = path_prefix
         self.vocab = vocab
-
         for k, v in kwargs.items():
             setattr(self, k, v)
+
+        self._samples_seen = 0
 
     def _exp_cache_path(self):
         return os.path.normpath(
@@ -72,7 +76,10 @@ class Experiment:
         return True
 
     def samples_seen(self):
-        return -1
+        return self._samples_seen
+
+    def plot(self):
+        pass
 
 
 class EntropySwitchesExperiment(Experiment):
@@ -81,13 +88,15 @@ class EntropySwitchesExperiment(Experiment):
         config: dict,
         path_prefix: str,
         vocab: EHRVocab,
+        path: str = None,
         *args,
+        **kwargs,
     ):
         """
         Measures the entropy of the nth switch during a session vs. the entropy.
         Also compares the entropy of all switches during a session vs. non-switches.
         """
-        super().__init__(config, path_prefix, vocab)
+        super().__init__(config, path_prefix, vocab, path, *args, **kwargs)
 
         self.switch_entropies_before: defaultdict[int, list] = defaultdict(
             list
@@ -95,6 +104,7 @@ class EntropySwitchesExperiment(Experiment):
         self.switch_entropies_after: defaultdict[int, list] = defaultdict(
             list
         )  # Switch no => list of entropies
+        self.switch_entropies_diff: defaultdict[int, list] = defaultdict(list)
         self.non_switch_entropies = []  # List of entropies for non-switches
         self.batch_ct = defaultdict(int)  # Batch no => current row
         self._samples_seen = 0
@@ -117,6 +127,7 @@ class EntropySwitchesExperiment(Experiment):
             switch_ct = self.batch_ct[batch_no]
             self.switch_entropies_before[switch_ct].append(prev_row_loss)
             self.switch_entropies_after[switch_ct].append(row_loss)
+            self.switch_entropies_diff[switch_ct].append(row_loss - prev_row_loss)
         else:
             self.non_switch_entropies.append(row_loss)
 
@@ -124,6 +135,26 @@ class EntropySwitchesExperiment(Experiment):
         return True
 
     def on_finish(self):
+        # Save the data
+        with open(self._exp_cache_path(), "wb") as f:
+            pickle.dump(
+                {
+                    "switch_entropies_before": self.switch_entropies_before,
+                    "switch_entropies_after": self.switch_entropies_after,
+                    "non_switch_entropies": self.non_switch_entropies,
+                    "switch_entropies_diff": self.switch_entropies_diff,
+                },
+                f,
+            )
+
+    def plot(self):
+        # Load the data
+        with open(self._exp_cache_path(), "rb") as f:
+            dat = pickle.load(f)
+        self.switch_entropies_before = dat["switch_entropies_before"]
+        self.switch_entropies_after = dat["switch_entropies_after"]
+        self.non_switch_entropies = dat["non_switch_entropies"]
+        self.switch_entropies_diff = dat["switch_entropies_diff"]
         # Plot the entropy of the nth switch during a session vs. the entropy.
         # Also compare the entropy of all switches during a session vs. non-switches.
         switch_entropies_before_mean = []
@@ -144,24 +175,45 @@ class EntropySwitchesExperiment(Experiment):
                 np.std(self.switch_entropies_before[switch_ct])
             )
 
-        # Plot the entropy of the nth switch during a session vs. the entropy.
+        # Plot the entropy of the nth switch during a session vs. the entropy as a violin plot
         x = np.arange(1, len(switch_entropies_before_mean) + 1)
         max_n = 10
-        plt.errorbar(
-            x[:max_n],
-            switch_entropies_before_mean[:max_n],
-            yerr=switch_entropies_before_std[:max_n],
-            label="Before",
-        )
-        plt.errorbar(
-            x[:max_n],
-            switch_entropies_after_mean[:max_n],
-            yerr=switch_entropies_after_std[:max_n],
-            label="After",
-        )
-        plt.xlabel("Switch")
+        plt.clf()
         plt.ylabel("Entropy")
-        plt.legend()
+        ax1: Axes = plt.subplot(3, 1, 1)
+        plt.violinplot(
+            [
+                self.switch_entropies_before[i]
+                for i in range(1, max_n + 1)
+                if i in self.switch_entropies_before
+            ],
+            showmeans=True,
+        )
+        ax1.set_title("Before Switch")
+        ax2 = plt.subplot(3, 1, 2)
+        plt.violinplot(
+            [
+                self.switch_entropies_after[i]
+                for i in range(1, max_n + 1)
+                if i in self.switch_entropies_after
+            ],
+            showmeans=True,
+        )
+        ax2.set_title("After Switch")
+        ax3 = plt.subplot(3, 1, 3)
+        plt.violinplot(
+            [
+                self.switch_entropies_diff[i]
+                for i in range(1, max_n + 1)
+                if i in self.switch_entropies_diff
+            ],
+            showmeans=True,
+        )
+        ax3.set_title("Difference")
+        plt.xlabel("Switch Number")
+        plt.suptitle("Entropy of Switches")
+        # Make the plot height bigger
+        plt.gcf().set_size_inches(10, 10)
         res_path = os.path.normpath(
             os.path.join(self.path_prefix, self.config["results_path"])
         )
@@ -184,6 +236,7 @@ class EntropySwitchesExperiment(Experiment):
         )
         plt.xticks([1, 2, 3], ["Non-switch", "Before", "After"])
         plt.ylabel("Entropy")
+        plt.title("Entropy of Switches vs. Non-switches")
         plt.savefig(
             os.path.normpath(
                 os.path.join(res_path, "entropy_switches_vs_non_switches.png")
@@ -206,6 +259,7 @@ class EntropySwitchesExperiment(Experiment):
         plt.legend()
         plt.xlabel("Entropy")
         plt.ylabel("Probability")
+        plt.title("Entropy of Switches vs. Non-switches")
         plt.savefig(
             os.path.normpath(
                 os.path.join(res_path, "entropy_switches_vs_non_switches_cdf.png")
@@ -228,6 +282,7 @@ class EntropySwitchesExperiment(Experiment):
         plt.legend()
         plt.xlabel("Log entropy")
         plt.ylabel("Probability")
+        plt.title("Log entropy of Switches vs. Non-switches")
         plt.savefig(
             os.path.normpath(
                 os.path.join(res_path, "log_entropy_switches_vs_non_switches_cdf.png")
@@ -248,6 +303,7 @@ class EntropySwitchesExperiment(Experiment):
         return self._samples_seen
 
 
+"""
 class SecureChatEntropy(Experiment):
     def __init__(self, config, path_prefix, vocab):
         super().__init__(config, path_prefix, vocab)
@@ -290,6 +346,20 @@ class SecureChatEntropy(Experiment):
             self.entropy_present.append(row_loss)
 
     def on_finish(self):
+        with open(self._exp_cache_path(), "wb") as f:
+            pickle.dump(
+                {
+                    "entropy_by_type": self.entropy_by_type,
+                    "entropy_present": self.entropy_present,
+                },
+                f,
+            )
+
+    def plot(self):
+        with open(self._exp_cache_path(), "rb") as f:
+            dat = pickle.load(f)
+            self.entropy_by_type = dat["entropy_by_type"]
+            self.entropy_present = dat["entropy_present"]
         # Plot the entropy of each type of secure chat as a histogram.
         plt.clf()
         for token, name in zip(self.secure_chat_vocab, self.secure_chat_vocab_names):
@@ -338,6 +408,7 @@ class SecureChatEntropy(Experiment):
 
     def samples_seen(self):
         return self._samples_seen
+"""
 
 
 class PatientsSessionsEntropyExperiment(Experiment):
@@ -387,6 +458,21 @@ class PatientsSessionsEntropyExperiment(Experiment):
         self.entropies.append(row_loss)
 
     def on_finish(self):
+        with open(self._exp_cache_path(), "wb") as f:
+            pickle.dump(
+                {
+                    "entropy_by_patient_count_mean": self.entropy_by_patient_count_mean,
+                    "entropy_by_patient_count_std": self.entropy_by_patient_count_std,
+                },
+                f,
+            )
+
+    def plot(self):
+        with open(self._exp_cache_path(), "rb") as f:
+            dat = pickle.load(f)
+            self.entropy_by_patient_count_mean = dat["entropy_by_patient_count_mean"]
+            self.entropy_by_patient_count_std = dat["entropy_by_patient_count_std"]
+
         # Scatter plot of mean entropy by number of patients
         plt.clf()
         points = []
@@ -466,6 +552,20 @@ class TimeEntropyExperiment(Experiment):
         return self._samples_seen
 
     def on_finish(self):
+        with open(self._exp_cache_path(), "wb") as f:
+            pickle.dump(
+                {
+                    "entropies_by_time_delta": self.entropies_by_time_delta,
+                    "time_delta_count": self.time_delta_count,
+                },
+                f,
+            )
+
+    def plot(self):
+        with open(self._exp_cache_path(), "rb") as f:
+            dat = pickle.load(f)
+            self.entropies_by_time_delta = dat["entropies_by_time_delta"]
+            self.time_delta_count = dat["time_delta_count"]
         # Plot the entropy by time delta as a combined barchart showing the % frequency of each time delta
         # as well as their average entropy w/ error bars
         plt.clf()
@@ -547,20 +647,26 @@ class TimeEntropyExperiment(Experiment):
         )
 
 
-class DayLevelEntropyExperiment:
+class DayLevelEntropyExperiment(Experiment):
     # Compares the average entropy to the amount of work performed by a provider on a given day.
     def __init__(self, config, path_prefix, vocab, dm: EHRAuditDataModule, **kwargs):
         super().__init__(config, path_prefix, vocab, **kwargs)
         self.dm = dm
-        self.entropies_by_day = defaultdict(list)  # Provider -> Day -> Entropy
-        self.session_day_count = defaultdict(int)  # Provider -> Day -> Count
-        self.action_day_count = defaultdict(int)  # Provider -> Day -> Count
+        # Avoid nested defaultdict because we can't pickle it.
+        self.entropies_by_day = defaultdict(dict)  # Provider -> Day -> Entropy
+        self.session_day_count = defaultdict(dict)  # Provider -> Day -> Count
+        self.action_day_count = defaultdict(dict)  # Provider -> Day -> Count
         self.batch_date = defaultdict(datetime)
         self._samples_seen = 0
         self._last_batch_date = None
+        self._last_provider = None
 
     def on_batch(self, sequence):
-        provider, seq = self.dm.hash_to_provider_sequence(session_hash(sequence))
+        # Temporary: There's a lot of missing hashses, so skip
+        sh = session_hash(sequence)
+        if sh not in self.dm.hash_to_provider_sequence:
+            return False
+        provider, seq = self.dm.hash_to_provider_sequence[sh]
         metadata = self.dm.provider_sequence_to_metadata[provider][seq]
         self._last_batch_date: datetime = metadata["date"]
         self._last_provider = provider
@@ -568,19 +674,96 @@ class DayLevelEntropyExperiment:
         return True
 
     def on_row(
-        self, row=None, prev_row=None, row_loss=None, prev_row_loss=None, batch_no=None
+        self,
+        row=None,
+        prev_row=None,
+        row_loss=None,
+        prev_row_loss=None,
+        batch_no=None,
+        batch_idx=None,
     ):
-        # Get the time delta
-        day: datetime = self._last_batch_date.date()
+        # Convert nanoseconds to days
+        day: datetime = datetime.fromtimestamp(self._last_batch_date / 1e9).date()
         # Record the entropy of this row
+        if day not in self.entropies_by_day[self._last_provider]:
+            self.entropies_by_day[self._last_provider][day] = []
         self.entropies_by_day[self._last_provider][day].append(row_loss)
         # Record the # of sessions, not actions.
         if prev_row is None:
+            if day not in self.session_day_count[self._last_provider]:
+                self.session_day_count[self._last_provider][day] = 0
             self.session_day_count[self._last_provider][day] += 1
+
+        if day not in self.action_day_count[self._last_provider]:
+            self.action_day_count[self._last_provider][day] = 0
         self.action_day_count[self._last_provider][day] += 1
 
     def on_finish(self):
-        pass
+        with open(self._exp_cache_path(), "wb") as f:
+            pickle.dump(
+                (
+                    self.entropies_by_day,
+                    self.session_day_count,
+                    self.action_day_count,
+                ),
+                f,
+            )
+
+    def plot(self):
+        with open(self._exp_cache_path(), "rb") as f:
+            (
+                self.entropies_by_day,
+                self.session_day_count,
+                self.action_day_count,
+            ) = pickle.load(f)
+        # Get the average entropy as a function of the number of sessions per day
+        entropy_by_session_count = defaultdict(list)
+        for provider, day_to_entropy in self.entropies_by_day.items():
+            for day, entropy in day_to_entropy.items():
+                entropy_by_session_count[self.session_day_count[provider][day]].extend(
+                    entropy
+                )
+        # Get the average entropy as a function of the number of actions per day
+        entropy_by_action_count = defaultdict(list)
+        for provider, day_to_entropy in self.entropies_by_day.items():
+            for day, entropy in day_to_entropy.items():
+                entropy_by_action_count[self.action_day_count[provider][day]].extend(
+                    entropy
+                )
+
+        # Plot the average entropy as a function of the number of sessions per day
+        def _plot(entropy_dict, variable_name):
+            plt.clf()
+            x, y = [], []
+            for k, v in entropy_dict.items():
+                x.extend([k] * len(v))
+                y.extend(v)
+            plt.scatter(
+                x,
+                y,
+                label=f"Entropy (n={len(x)})",
+            )
+            # Trendline
+            z = np.polyfit(x, y, 1)
+            p = np.poly1d(z)
+            r = np.corrcoef(x, y)[0, 1]
+            plt.plot(x, p(x), "r--", label=f"Trendline (r ={r:.2f})")
+            plt.xlabel(f"Number of {variable_name}s")
+            plt.ylabel(f"Entropy")
+            plt.title(f"Entropy by Number of {variable_name}s")
+            plt.legend()
+            plt.savefig(
+                os.path.normpath(
+                    os.path.join(
+                        self.path_prefix,
+                        self.config["results_path"],
+                        f"entropy_by_{variable_name.lower()}_count.png",
+                    )
+                )
+            )
+
+        _plot(entropy_by_session_count, "Session")
+        _plot(entropy_by_action_count, "Action")
 
 
 if __name__ == "__main__":
@@ -608,6 +791,17 @@ if __name__ == "__main__":
         "--val",
         action="store_true",
         help="Run with the validation dataset instead of the test.",
+    )
+    parser.add_argument(
+        "-p",
+        "--plot_only",
+        action="store_true",
+        help="Plot the results without running the experiment.",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Run in debug mode/turn off multi-threading",
     )
     args = parser.parse_args()
     # Get the list of models from the config file
@@ -668,6 +862,8 @@ if __name__ == "__main__":
         yaml_config_path=config_path,
         vocab=vocab,
         batch_size=1,  # Just one sample at a time
+        load_metadata=True,
+        debug=args.debug,
     )
     dm.setup()
     if args.val:
@@ -689,9 +885,11 @@ if __name__ == "__main__":
     window_size = 30  # 30 action window
 
     # Initialize the experiments
+    exp_args = (config, path_prefix, vocab)
+    exp_kwargs = {"dm": dm}
     if "," in args.exp:
         experiments = [
-            eval(exp)(config, path_prefix, vocab) for exp in args.exp.split(",")
+            eval(exp)(*exp_args, **exp_kwargs) for exp in args.exp.split(",")
         ]
     elif "all" in args.exp:
         # Get a list of all classes that sublcass Experiment in this file.
@@ -702,9 +900,14 @@ if __name__ == "__main__":
             and issubclass(obj, Experiment)
             and obj != Experiment
         ]
-        experiments = [exp(config, path_prefix, vocab) for exp in exp_classes]
+        experiments = [exp(*exp_args, **exp_kwargs) for exp in exp_classes]
     else:
-        experiments = [eval(args.exp)(config, path_prefix, vocab)]
+        experiments = [eval(args.exp)(*exp_args, **exp_kwargs)]
+
+    if args.plot_only:
+        for exp in experiments:
+            exp.plot()
+        sys.exit()
 
     print(f"Running experiments:")
     for exp in experiments:
@@ -821,8 +1024,15 @@ if __name__ == "__main__":
         ):
             break
 
+    for p in exp_pbar:
+        p.close()
+
     for e in experiments:
         e.on_finish()
+
+    # Todo: Add an option to just load and plot the entropy values
+    for e in experiments:
+        e.plot()
 
     # Print statistics about the entropy values
     stats = {
