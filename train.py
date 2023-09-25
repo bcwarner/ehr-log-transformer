@@ -4,15 +4,16 @@ import os
 from datetime import datetime
 
 import lightning.pytorch as pl
+import numpy as np
 import torch
 import yaml
 from lightning import Callback
 from lightning.pytorch.callbacks import TQDMProgressBar, EarlyStopping
 from lightning.pytorch.profilers import PyTorchProfiler, AdvancedProfiler
 from lightning.pytorch.tuner import Tuner
-from transformers import GPT2Config, RwkvConfig
+from transformers import GPT2Config, RwkvConfig, TransfoXLConfig, LlamaConfig
 
-from model.model import EHRAuditGPT2, EHRAuditRWKV
+from model.model import EHRAuditGPT2, EHRAuditRWKV, EHRAuditTransformerXL, EHRAuditLlama
 from model.modules import EHRAuditPretraining, EHRAuditDataModule
 from model.vocab import EHRVocab
 
@@ -71,7 +72,41 @@ if __name__ == "__main__":
         default=None,
         help="Converts a Lightning checkpoint to a HuggingFace checkpoint.",
     )
+    parser.add_argument(
+        "--tf32",
+        default=True,
+        action="store",
+        help="Whether to use tf32 precision on Ampere GPUs.",
+    )
+    parser.add_argument(
+        "--layers",
+        type=int,
+        default=None,
+        help="Number of layers to use for the model.",
+    )
+    parser.add_argument(
+        "--heads",
+        type=int,
+        default=6,
+        help="Number of heads to use for the model.",
+    )
+    parser.add_argument(
+        "--hidden_size",
+        type=int,
+        default=None,
+        help="Size for the hidden state of the model if applicable.",
+    )
+    parser.add_argument(
+        "--continue_from",
+        type=str,
+        default=None,
+        help="Path to a checkpoint to continue training from.",
+    )
     args = parser.parse_args()
+
+    # Is this an Ampere GPU?
+    if torch.cuda.is_available() and torch.cuda.get_device_capability()[0] >= 8:
+        torch.backends.cuda.matmul.allow_tf32 = args.tf32
 
     # Load configuration and vocab
     config_path = os.path.normpath(
@@ -91,15 +126,39 @@ if __name__ == "__main__":
     )
     models = {
         "gpt2": EHRAuditGPT2,
+        "transformer-xl": EHRAuditTransformerXL,
+        "rwkv": EHRAuditRWKV,
+        "llama": EHRAuditLlama,
     }
     model_configs = {
         "gpt2": GPT2Config(
             vocab_size=len(vocab),
             n_positions=1024,
-            n_head=6,
-            n_layer=6,
+            n_head=args.heads,
+            n_layer=6 if args.layers is None else args.layers,
         ),
+        "transformer-xl": TransfoXLConfig( # To evaluate later, needs significant reconfiguration.
+            vocab_size=len(vocab),
+            n_positions=4096,
+            n_head=args.heads,
+            n_layer=6 if args.layers is None else args.layers,
+            cutoffs=np.cumsum([len(v) for k, v in vocab.field_ids.items()])
+        ),
+        "rwkv": RwkvConfig(
+            vocab_size=len(vocab),
+            n_positions=1024,
+            hidden_size=512 if not args.hidden_size else args.hidden_size,
+            num_hidden_layers=6 if args.layers is None else args.layers,
+        ),
+        "llama": LlamaConfig(
+            vocab_size=len(vocab),
+            n_positions=1024,
+            hidden_size=512 if not args.hidden_size else args.hidden_size,
+            num_hidden_layers=6 if args.layers is None else args.layers,
+        )
     }
+
+    model = models[args.model](model_configs[args.model], vocab)
 
     dm = EHRAuditDataModule(
         config_path,
@@ -107,9 +166,8 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         reset_cache=args.reset_cache,
         debug=args.dbg,
+        n_positions=model_configs[args.model].n_positions,
     )
-
-    model = models[args.model](model_configs[args.model], vocab)
 
     # Either load the model from a checkpoint for saving, or train it.
     if args.conv_ckpt is not None:
@@ -130,6 +188,10 @@ if __name__ == "__main__":
         val_max = args.subset if args.profile is False else 100
         test_max = args.subset if args.profile is False else 100
 
+        param_count = sum(p.numel() for p in pt_task.model.parameters()) / 1e6
+        todays_date = datetime.now().strftime("%Y-%m-%d")
+        param_name = f"{args.model}/{param_count:.1f}M/{todays_date}".replace(".", "_")
+
         trainer = pl.Trainer(
             max_epochs=args.max_epochs,
             logger=pl.loggers.TensorBoardLogger(
@@ -137,6 +199,7 @@ if __name__ == "__main__":
                     os.path.join(path_prefix, config["log_path"])
                 ),
                 name="pretraining",
+                version=param_name.replace("/", "_"),
             ),
             accumulate_grad_batches=4,
             profiler=profiler,
@@ -153,12 +216,10 @@ if __name__ == "__main__":
         trainer.fit(
             pt_task,
             datamodule=dm,
+            ckpt_path=args.continue_from,
         )
 
     # Save the model according to the HuggingFace API
-    param_count = sum(p.numel() for p in pt_task.model.parameters()) / 1e6
-    todays_date = datetime.now().strftime("%Y-%m-%d")
-    param_name = f"{args.model}/{param_count:.1f}M/{todays_date}".replace(".", "_")
     fname = os.path.normpath(
         os.path.join(path_prefix, config["pretrained_model_path"], param_name)
     )
