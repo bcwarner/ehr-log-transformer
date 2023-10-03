@@ -156,6 +156,9 @@ class EHRAuditDataModule(pl.LightningDataModule):
             ):
                 return
 
+            if provider in self.config["exclusion_list"]:
+                return
+
             dset = EHRAuditDataset(
                 prov_path,
                 session_sep_min=session_sep_min,
@@ -211,6 +214,10 @@ class EHRAuditDataModule(pl.LightningDataModule):
                     os.path.join(prov_path, self.config["audit_log_cache"])
                 )
             ):
+                continue
+
+            # Check that they are not on the exclusion list
+            if provider in self.config["exclusion_list"]:
                 continue
 
             dset = EHRAuditDataset(

@@ -29,6 +29,7 @@ import numpy as np
 METRIC_NAME_COL = 0
 PAT_ID_COL = 1
 ACCESS_TIME_COL = 2
+USER_ID_COL = 3
 
 
 if __name__ == "__main__":
@@ -150,7 +151,7 @@ if __name__ == "__main__":
     # Provider => row => field => entropy
     whole_set_entropy_map = defaultdict(lambda:
                                         defaultdict(lambda:
-                                                    {"METRIC_NAME": pd.NA, "PAT_ID": pd.NA, "ACCESS_TIME": pd.NA})
+                                                    {"METRIC_NAME": pd.NA, "PAT_ID": pd.NA, "ACCESS_TIME": pd.NA, "USER_ID": pd.NA})
                                         )
 
     cur_provider = None
@@ -186,6 +187,7 @@ if __name__ == "__main__":
                 whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["METRIC_NAME"] = pd.NA
                 whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["PAT_ID"] = pd.NA
                 whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["ACCESS_TIME"] = pd.NA
+                whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["USER_ID"] = pd.NA
                 continue
 
             # NOTE: Next-token generation != next-row generation
@@ -200,6 +202,7 @@ if __name__ == "__main__":
             whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["METRIC_NAME"] = pd.NA
             whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["PAT_ID"] = pd.NA
             whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["ACCESS_TIME"] = pd.NA
+            whole_set_entropy_map
 
             for i in range(0, row_count):
                 input_ids_start = i * row_len
@@ -222,6 +225,7 @@ if __name__ == "__main__":
                 metric_loss = loss[METRIC_NAME_COL, i]
                 patient_loss = loss[PAT_ID_COL, i]
                 time_loss = loss[ACCESS_TIME_COL, i]
+                user_loss = loss[USER_ID_COL, i]
 
                 whole_row_idx = dset.seqs_indices[batch_idx - dset_start_idx][0] + (i + 1)
                 # +1 to account for the first row being the header
@@ -229,6 +233,7 @@ if __name__ == "__main__":
                 whole_set_entropy_map[provider][whole_row_idx]["METRIC_NAME"] = metric_loss
                 whole_set_entropy_map[provider][whole_row_idx]["PAT_ID"] = patient_loss
                 whole_set_entropy_map[provider][whole_row_idx]["ACCESS_TIME"] = time_loss
+                whole_set_entropy_map[provider][whole_row_idx]["USER_ID"] = user_loss
 
     # Upon completion, save the entropy map
     for dset_count, (provider, entropy_map) in enumerate(whole_set_entropy_map.items()):

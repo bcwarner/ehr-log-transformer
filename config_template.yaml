@@ -24,3 +24,4 @@ timestamp_bins:
   min: 0
   max: 240
   bins: 5
+exclusion_list:
