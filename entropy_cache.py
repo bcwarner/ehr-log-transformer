@@ -135,17 +135,19 @@ if __name__ == "__main__":
     model.to(device)
     model_name = "-".join(model_list[model_idx].split(os.sep)[0:2])
 
-    val_test_dset = ConcatDataset(dm.val_dataset.datasets + dm.test_dataset.datasets)
+    all_datasets = dm.cdsets
+    subset_indices = dm.val_dataset.indices + dm.test_dataset.indices
+    comb_subset = torch.utils.data.Subset(all_datasets, subset_indices)
 
     dl = torch.utils.data.DataLoader(
-        val_test_dset,
+        comb_subset,
         num_workers=0,
         batch_size=1,
         collate_fn=partial(collate_fn, n_positions=dm.n_positions),
         worker_init_fn=partial(worker_fn, seed=dm.seed),
         pin_memory=True,
         shuffle=False,
-        batch_sampler=BatchSampler(SequentialSampler(val_test_dset), batch_size=1, drop_last=False),
+        batch_sampler=BatchSampler(SequentialSampler(comb_subset), batch_size=1, drop_last=False),
     )
 
     # Provider => row => field => entropy
@@ -156,7 +158,7 @@ if __name__ == "__main__":
 
     cur_provider = None
     providers_seen = set()
-    pbar = tqdm(enumerate(dl), total=len(dl))
+    pbar = tqdm(zip(subset_indices, dl), total=len(dl))
     for batch_idx, batch in pbar:
         input_ids, labels = batch
 
