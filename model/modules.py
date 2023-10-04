@@ -217,7 +217,7 @@ class EHRAuditDataModule(pl.LightningDataModule):
                 continue
 
             # Check that they are not on the exclusion list
-            if provider in self.config["exclusion_list"]:
+            if "exclusion_list" in self.config and provider in self.config["exclusion_list"]:
                 continue
 
             dset = EHRAuditDataset(
