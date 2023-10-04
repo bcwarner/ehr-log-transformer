@@ -177,9 +177,9 @@ if __name__ == "__main__":
             labels_c[:, :] = -100
 
             # Get the index of the current row in the whole df
-            dset_idx = bisect.bisect_right(dl.dataset.cumulative_sizes, batch_idx)
-            dset_start_idx = dl.dataset.cumulative_sizes[dset_idx - 1] if dset_idx > 0 else 0
-            dset = dl.dataset.datasets[dset_idx]
+            dset_idx = bisect.bisect_right(all_datasets.cumulative_sizes, batch_idx)
+            dset_start_idx = all_datasets.cumulative_sizes[dset_idx - 1] if dset_idx > 0 else 0
+            dset = all_datasets.datasets[dset_idx]
             provider = dset.provider
 
             ce_current = []
@@ -204,7 +204,7 @@ if __name__ == "__main__":
             whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["METRIC_NAME"] = pd.NA
             whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["PAT_ID"] = pd.NA
             whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["ACCESS_TIME"] = pd.NA
-            whole_set_entropy_map
+            whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["USER_ID"] = pd.NA
 
             for i in range(0, row_count):
                 input_ids_start = i * row_len
@@ -246,7 +246,7 @@ if __name__ == "__main__":
 
         if args.verify:
             # Make sure all the sequence ranges line up.
-            seqs_indices = dl.dataset.datasets[dset_count].seqs_indices
+            seqs_indices = all_datasets.datasets[dset_count].seqs_indices
             for i, (start, stop) in enumerate(seqs_indices):
                 if len(entropy_df.loc[start:stop, :]) != stop - start + 1:
                     raise ValueError(f"Sequence range {start}:{stop} does not line up with entropy_df.")
