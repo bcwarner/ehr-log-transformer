@@ -245,19 +245,19 @@ class EHRAuditDataModule(pl.LightningDataModule):
         self.seed = config["random_seed"]
 
         # Concatenate the datasets together. This is done differently than the mainline branch.
-        cdsets = ConcatDataset(datasets)
+        self.cdsets = ConcatDataset(datasets)
         # Split the dataset into train, val, test
         train_indices, val_indices, test_indices = torch.utils.data.random_split(
-            range(len(cdsets)),
+            range(len(self.cdsets)),
             [
                 self.config["train_split"],
                 self.config["val_split"],
                 1 - self.config["train_split"] - self.config["val_split"],
             ],
         )
-        self.train_dataset = Subset(cdsets, train_indices)
-        self.val_dataset = Subset(cdsets, val_indices)
-        self.test_dataset = Subset(cdsets, test_indices)
+        self.train_dataset = Subset(self.cdsets, train_indices)
+        self.val_dataset = Subset(self.cdsets, val_indices)
+        self.test_dataset = Subset(self.cdsets, test_indices)
         self.num_workers = 2 if not self.debug else 1  # os.cpu_count()
         print(f"Using {self.num_workers} workers for data loading.")
         print(
