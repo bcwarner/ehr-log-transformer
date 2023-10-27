@@ -185,7 +185,7 @@ if __name__ == "__main__":
             ce_current = []
             row_len = len(vocab.field_ids) - 1  # Exclude special fields
             row_count = eos_index // row_len # No need to offset for eos
-            if row_count <= 1:  # Not applicable
+            if row_count <= 2:  # Not applicable
                 whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["METRIC_NAME"] = pd.NA
                 whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["PAT_ID"] = pd.NA
                 whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["ACCESS_TIME"] = pd.NA
@@ -206,7 +206,7 @@ if __name__ == "__main__":
             whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["ACCESS_TIME"] = pd.NA
             whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["USER_ID"] = pd.NA
 
-            for i in range(0, row_count):
+            for i in range(0, row_count - 1):
                 input_ids_start = i * row_len
                 input_ids_end = input_ids_start + row_len
                 input_ids_end_extra = input_ids_end + row_len
@@ -229,6 +229,7 @@ if __name__ == "__main__":
                 time_loss = loss[ACCESS_TIME_COL, i]
                 user_loss = loss[USER_ID_COL, i]
 
+                # check this is right!!!
                 whole_row_idx = dset.seqs_indices[batch_idx - dset_start_idx][0] + (i + 1)
                 # +1 to account for the first row being the header
 
@@ -236,6 +237,8 @@ if __name__ == "__main__":
                 whole_set_entropy_map[provider][whole_row_idx]["PAT_ID"] = patient_loss
                 whole_set_entropy_map[provider][whole_row_idx]["ACCESS_TIME"] = time_loss
                 whole_set_entropy_map[provider][whole_row_idx]["USER_ID"] = user_loss
+
+            pass
 
     # Upon completion, save the entropy map
     for dset_count, (provider, entropy_map) in enumerate(whole_set_entropy_map.items()):
