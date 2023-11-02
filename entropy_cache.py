@@ -171,10 +171,10 @@ if __name__ == "__main__":
                 eos_index = nonzeros[0][0].item() - 1
 
             # Copy the labels and targets
-            input_ids_c = torch.zeros_like(input_ids)
-            labels_c = labels.clone()
+            #input_ids_c = torch.zeros_like(input_ids)
+            #labels_c = labels.clone()
             # Set the labels to -100, zero out the input_ids
-            labels_c[:, :] = -100
+            #labels_c[:, :] = -100
 
             # Get the index of the current row in the whole df
             dset_idx = bisect.bisect_right(all_datasets.cumulative_sizes, batch_idx)
@@ -185,7 +185,7 @@ if __name__ == "__main__":
             ce_current = []
             row_len = len(vocab.field_ids) - 1  # Exclude special fields
             row_count = eos_index // row_len # No need to offset for eos
-            if row_count <= 2:  # Not applicable
+            if row_count <= 1:  # Not applicable
                 whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["METRIC_NAME"] = pd.NA
                 whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["PAT_ID"] = pd.NA
                 whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["ACCESS_TIME"] = pd.NA
@@ -206,31 +206,30 @@ if __name__ == "__main__":
             whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["ACCESS_TIME"] = pd.NA
             whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["USER_ID"] = pd.NA
 
-            for i in range(0, row_count - 1):
-                input_ids_start = i * row_len
-                input_ids_end = input_ids_start + row_len
-                input_ids_end_extra = input_ids_end + row_len
-                # Get the current row
-                input_ids_c[:, input_ids_start:input_ids_end_extra] = input_ids[
-                    :, input_ids_start:input_ids_end_extra
-                ]
-                # Labels are next row.
-                labels_row_start = (i + 1) * row_len
-                labels_row_end = labels_row_start + row_len
-                labels_c[:, labels_row_start:labels_row_end] = labels[
-                    :, labels_row_start:labels_row_end
-                ]
+            # Calculate the cross entropy
+            output = model(input_ids.to(device), labels=labels.to(device), return_dict=True)
+            loss = output.loss.cpu().numpy()
 
-                # Calculate the cross entropy
-                output = model(input_ids_c.to(device), labels=labels_c.to(device), return_dict=True)
-                loss = output.loss.cpu().numpy()
-                metric_loss = loss[METRIC_NAME_COL, i]
+            for i in range(1, row_count - 1):
+                #input_ids_start = i * row_len
+                #input_ids_end = input_ids_start + row_len
+                #input_ids_end_extra = input_ids_end + row_len
+                ## Get the current row
+                #input_ids_c[:, input_ids_start:input_ids_end_extra] = input_ids[
+                #    :, input_ids_start:input_ids_end_extra
+                #]
+                ## Labels are next row.
+                #labels_row_start = (i + 1) * row_len
+                #labels_row_end = labels_row_start + row_len
+                #labels_c[:, labels_row_start:labels_row_end] = labels[
+                #    :, labels_row_start:labels_row_end
+                #]
+                metric_loss = loss[METRIC_NAME_COL, i - 1]
                 patient_loss = loss[PAT_ID_COL, i]
                 time_loss = loss[ACCESS_TIME_COL, i]
                 user_loss = loss[USER_ID_COL, i]
 
-                # check this is right!!!
-                whole_row_idx = dset.seqs_indices[batch_idx - dset_start_idx][0] + (i + 1)
+                whole_row_idx = dset.seqs_indices[batch_idx - dset_start_idx][0] + i
                 # +1 to account for the first row being the header
 
                 whole_set_entropy_map[provider][whole_row_idx]["METRIC_NAME"] = metric_loss
