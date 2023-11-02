@@ -97,7 +97,7 @@ class NextActionExperiment(GenerationExperiment):
     def stopping_criteria(self, context_length: int = 0, total_length: int = 0):
         return StoppingCriteriaList(
             [
-                MaxLengthCriteria(max_length=context_length + 3),
+                MaxLengthCriteria(max_length=context_length + len(self.vocab.field_names(include_special=False))),
             ]
         )
 
@@ -437,15 +437,15 @@ if __name__ == "__main__":
             else:
                 eos_index = nonzeros[0][0].item() - 1
 
-            row_count = (eos_index - 1) // row_len
+            row_count = eos_index // row_len
             min_rows = exp.window_size()
             if 0 < min_rows <= 1:
                 min_rows = int(1 / min_rows)
 
-            if row_count <= min_rows:  # Not applicable
+            if row_count <= min_rows or row_count <= 2:  # Not applicable
                 continue
 
-            for i in range(min_rows, row_count):
+            for i in range(min_rows, row_count - 1):
                 window_size = i * row_len
 
                 # Copy the labels, and zero out past the window length.
