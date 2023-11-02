@@ -3,6 +3,7 @@ from functools import partial
 from typing import Any
 
 import joblib
+import pandas as pd
 import torch
 import yaml
 from lightning import pytorch as pl
@@ -113,6 +114,7 @@ class EHRAuditDataModule(pl.LightningDataModule):
         n_positions=1024,
         reset_cache=False,
         debug=False,
+        provider_type=None
     ):
         super().__init__()
         with open(yaml_config_path) as f:
@@ -121,6 +123,7 @@ class EHRAuditDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.n_positions = n_positions
         self.reset_cache = reset_cache
+        self.provider_type = provider_type
         self.debug = debug
 
     def prepare_data(self):
@@ -171,6 +174,7 @@ class EHRAuditDataModule(pl.LightningDataModule):
                     self.config["timestamp_bins"]["max"],
                     self.config["timestamp_bins"]["bins"],
                 ],
+                event_type_cols=["METRIC_NAME|REPORT_NAME"],
                 user_max=self.config["patient_id_max"],
                 should_tokenize=True,
                 cache=self.config["audit_log_cache"],
@@ -206,6 +210,20 @@ class EHRAuditDataModule(pl.LightningDataModule):
             os.path.join(path_prefix, self.config["audit_log_path"])
         )
         datasets = []
+
+        # If self.provider_type is not None, then we only want to load the data from that provider type.
+        if self.provider_type is not None:
+            # Load the user ID list, and filter out the providers that are not of the given type.
+            user_id_df = pd.read_csv(
+                os.path.normpath(
+                    os.path.join(path_prefix, self.config["user_id_list"])
+                )
+            )
+            user_id_df = user_id_df[user_id_df["PROV_TYPE"] == self.provider_type]
+            user_id_list = user_id_df["USER_ID"].tolist()
+        else:
+            user_id_list = None
+
         for provider in os.listdir(data_path):
             # Check there's a cache file (some should not have this, see above)
             prov_path = os.path.normpath(os.path.join(data_path, provider))
@@ -220,6 +238,10 @@ class EHRAuditDataModule(pl.LightningDataModule):
             if "exclusion_list" in self.config and provider in self.config["exclusion_list"]:
                 continue
 
+            if user_id_list is not None:
+                if provider not in user_id_list:
+                    continue
+
             dset = EHRAuditDataset(
                 prov_path,
                 session_sep_min=self.config["sep_min"],
@@ -233,6 +255,7 @@ class EHRAuditDataModule(pl.LightningDataModule):
                 ],
                 user_max=self.config["patient_id_max"],
                 should_tokenize=False,
+                event_type_cols=["METRIC_NAME|REPORT_NAME"],
                 cache=self.config["audit_log_cache"],
                 max_length=self.n_positions,
             )

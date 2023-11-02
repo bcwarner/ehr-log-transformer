@@ -102,6 +102,10 @@ if __name__ == "__main__":
         default=None,
         help="Path to a checkpoint to continue training from.",
     )
+    parser.add_argument(
+        "--provider_type",
+        type=str,
+    )
     args = parser.parse_args()
 
     # Is this an Ampere GPU?
@@ -167,6 +171,7 @@ if __name__ == "__main__":
         reset_cache=args.reset_cache,
         debug=args.dbg,
         n_positions=model_configs[args.model].n_positions,
+        provider_type=args.provider_type,
     )
 
     # Either load the model from a checkpoint for saving, or train it.
@@ -190,7 +195,7 @@ if __name__ == "__main__":
 
         param_count = sum(p.numel() for p in pt_task.model.parameters()) / 1e6
         todays_date = datetime.now().strftime("%Y-%m-%d")
-        param_name = f"{args.model}/{param_count:.1f}M/{todays_date}".replace(".", "_")
+        param_name = f"{args.model}/{param_count:.1f}M-{args.provider_type}/{todays_date}".replace(".", "_")
 
         trainer = pl.Trainer(
             max_epochs=args.max_epochs,

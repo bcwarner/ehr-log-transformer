@@ -203,8 +203,8 @@ if __name__ == "__main__":
         os.path.normpath(os.path.join(path_prefix, config["metric_name_dict"]["file"])),
         engine="openpyxl",
     )
-    categorical_column_opts["METRIC_NAME"] = df[
-        config["metric_name_dict"]["column"]
+    categorical_column_opts[config["metric_name_dict"]["column"]] = df[
+        config["metric_name_dict"]["column"].split("|")[0]
     ].tolist()
 
     # Missing METRIC_NAMEs
@@ -214,7 +214,7 @@ if __name__ == "__main__":
         ),
         engine="openpyxl",
     )
-    categorical_column_opts["METRIC_NAME"].extend(
+    categorical_column_opts[config["metric_name_dict"]["column"]].extend(
         # Extend with the column at index 0
         df2.iloc[:, 0].tolist()
     )

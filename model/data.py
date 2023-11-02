@@ -87,7 +87,12 @@ class EHRAuditDataset(Dataset):
 
         if self.timestamp_spaces is None and self.should_tokenize is True:
             raise ValueError("Tokenization depends on timestamp binning.")
-        self.cache = cache + "4tokens"
+        if cache is not None:
+            self.cache = cache + (
+                ("_" + str(self.max_length)) if self.max_length != 1024 else ""
+            )
+        else:
+            self.cache = None
 
     def load(self):
         """

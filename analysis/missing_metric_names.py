@@ -54,9 +54,10 @@ if __name__ == "__main__":
     def find_missing_metrics(provider_path):
         dataset = EHRAuditDataset(
             provider_path,
-            session_sep_min=config["sep_min"],
-            log_name="access_log_raw.csv",
-            event_type_cols=["METRIC_NAME", "METRIC_ID"],
+            session_sep_min=config["sep_min"]["session"],
+            shift_sep_min=config["sep_min"]["shift"],
+            log_name="access_log_complete_ICU_shift.csv",
+            event_type_cols=[config["metric_name_dict"]["column"]],
             should_tokenize=False,
             cache=None,
         )
@@ -65,11 +66,11 @@ if __name__ == "__main__":
         not_missing_ms = defaultdict(int)
         for seq in dataset:
             for idx, event in seq.iterrows():
-                if event["METRIC_NAME"] not in metric_dict:
-                    missing_ms[event["METRIC_NAME"]] += 1
+                if event[config["metric_name_dict"]["column"]] not in metric_dict:
+                    missing_ms[event[config["metric_name_dict"]["column"]]] += 1
                     # missing_ms[(event["METRIC_NAME"], event["METRIC_ID"])] += 1
                 else:
-                    not_missing_ms[event["METRIC_NAME"]] += 1
+                    not_missing_ms[event[config["metric_name_dict"]["column"]]] += 1
 
         return missing_ms, not_missing_ms
 
