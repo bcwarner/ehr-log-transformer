@@ -186,7 +186,7 @@ if __name__ == "__main__":
             row_len = len(vocab.field_ids) - 1  # Exclude special fields
             row_count = eos_index // row_len # No need to offset for eos
             if row_count <= 1:  # Not applicable
-                whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["METRIC_NAME"] = pd.NA
+                whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["METRIC_NAME|REPORT_NAME"] = pd.NA
                 whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["PAT_ID"] = pd.NA
                 whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["ACCESS_TIME"] = pd.NA
                 whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["USER_ID"] = pd.NA
@@ -201,7 +201,7 @@ if __name__ == "__main__":
                 pbar.set_postfix({"providers": len(providers_seen)})
 
             # Add a NA for the first row.
-            whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["METRIC_NAME"] = pd.NA
+            whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["METRIC_NAME|REPORT_NAME"] = pd.NA
             whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["PAT_ID"] = pd.NA
             whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["ACCESS_TIME"] = pd.NA
             whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["USER_ID"] = pd.NA
@@ -232,7 +232,7 @@ if __name__ == "__main__":
                 whole_row_idx = dset.seqs_indices[batch_idx - dset_start_idx][0] + i
                 # +1 to account for the first row being the header
 
-                whole_set_entropy_map[provider][whole_row_idx]["METRIC_NAME"] = metric_loss
+                whole_set_entropy_map[provider][whole_row_idx]["METRIC_NAME|REPORT_NAME"] = metric_loss
                 whole_set_entropy_map[provider][whole_row_idx]["PAT_ID"] = patient_loss
                 whole_set_entropy_map[provider][whole_row_idx]["ACCESS_TIME"] = time_loss
                 whole_set_entropy_map[provider][whole_row_idx]["USER_ID"] = user_loss
