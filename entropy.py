@@ -745,7 +745,7 @@ class MaxMinAverageSessionExperiment(Experiment):
     # Find example sessions with minimum, maximum, and around average session length, then print out tables of them.
     def __init__(self, config, path_prefix, vocab, model, *args, **kwargs):
         super().__init__(config, path_prefix, vocab, model, *args, **kwargs)
-        self.target_id = self.vocab.field_to_token("METRIC_NAME", "Inpatient Patient Lists list loaded")
+        self.target_id = self.vocab.field_to_token("METRIC_NAME", "Haiku login")
         self.target_session = None
         self.target_entropy = torch.tensor([0.0])
         self.min_session = []
@@ -1066,35 +1066,25 @@ if __name__ == "__main__":
             prev_row_field_loss = None
             # NOTE: Next-token generation != next-row generation
             # This means that we include the next two tokens in the input to avoid EOS predictions.
-            loss_pos = model.loss.col_ids_labels.transpose(0, 1).flatten()
-            for i in range(0, row_count):
-                input_ids_start = i * row_len
-                input_ids_end = input_ids_start + row_len
-                input_ids_end_extra = input_ids_end + row_len
-                # Get the current row
-                input_ids_c[:, input_ids_start:input_ids_end_extra] = input_ids[
-                    :, input_ids_start:input_ids_end_extra
-                ]
-                # Labels are next row.
-                labels_row_start = (i + 1) * row_len
+            output = model(input_ids.to(device), labels=labels.to(device), return_dict=True)
+            loss = output.loss.cpu().numpy()
+
+            for i in range(1, row_count):
+                # input_ids_start = (i - 1) * row_len
+                # input_ids_end = input_ids_start + row_len
+                # input_ids_end_extra = input_ids_end + row_len
+                ## Get the current row
+                # input_ids_c[:, input_ids_start:input_ids_end_extra] = input_ids[
+                #    :, input_ids_start:input_ids_end_extra
+                # ]
+                ## Labels are next row.
+                labels_row_start = (i) * row_len
                 labels_row_end = labels_row_start + row_len
-                labels_c[:, labels_row_start:labels_row_end] = labels[
-                    :, labels_row_start:labels_row_end
-                ]
-                #if i > 0:
-                #    labels_c[
-                #        :, input_ids_start:input_ids_end
-                #    ] = -100  # Eliminate previous row.
+                # labels_c[:, labels_row_start:labels_row_end] = labels[
+                #    :, labels_row_start:labels_row_end
+                # ]
 
-                # if i >= window_size:
-                #    old_row_start = (i - window_size) * row_len
-                #    old_row_end = old_row_start + row_len
-                #    input_ids_c[:, old_row_start:old_row_end] = 0
-
-                # Calculate the cross entropy
-                output = model(input_ids_c.to(device), labels=labels_c.to(device), return_dict=True)
-                loss = output.loss.cpu().numpy()
-                metric_loss = loss[METRIC_NAME_COL, i]
+                metric_loss = loss[METRIC_NAME_COL, i - 1]
                 patient_loss = loss[PAT_ID_COL, i]
                 time_loss = loss[ACCESS_TIME_COL, i]
                 loss_restricted = [metric_loss, patient_loss, time_loss]
