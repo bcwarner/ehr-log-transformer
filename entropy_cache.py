@@ -22,7 +22,6 @@ from model.model import EHRAuditGPT2, EHRAuditRWKV, EHRAuditLlama
 from model.modules import EHRAuditPretraining, EHRAuditDataModule, collate_fn, worker_fn
 from model.data import timestamp_space_calculation
 from model.vocab import EHRVocab, EHRAuditTokenizer
-import tikzplotlib
 import numpy as np
 
 # Fyi: this is a quick-and-dirty way of id'ing the columns, will need to be changed if the tabularization changes
@@ -57,6 +56,10 @@ if __name__ == "__main__":
         "--verify",
         action="store_true",
         help="Whether to verify the entropy values line up with the dataset.",
+    )
+    parser.add_argument(
+        "--provider_type",
+        type=str,
     )
     args = parser.parse_args()
     # Get the list of models from the config file
@@ -118,6 +121,7 @@ if __name__ == "__main__":
         batch_size=1,  # Just one sample at a time
         reset_cache=args.reset_cache,
         debug=args.debug,
+        provider_type=args.provider_type,
     )
     if args.reset_cache:
         dm.prepare_data()
