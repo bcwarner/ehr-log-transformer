@@ -318,6 +318,10 @@ if __name__ == "__main__":
         default="no", # other options: "yes", "only"
     )
     parser.add_argument(
+        "--provider_type",
+        type=str,
+    )
+    parser.add_argument(
         "--exp",
         type=str,
         default="NextActionExperiment",
@@ -401,6 +405,7 @@ if __name__ == "__main__":
         yaml_config_path=config_path,
         vocab=vocab,
         batch_size=1,  # Just one sample at a time
+        provider_type=args.provider_type,
     )
     dm.setup()
     if args.val:
