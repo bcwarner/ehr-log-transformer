@@ -217,7 +217,6 @@ class EntropySwitchesExperiment(Experiment):
                 np.std(self.switch_entropies_before[switch_ct])
             )
 
-        for
         # Plot the entropy of the nth switch during a session vs. the entropy as a violin plot
         x = np.arange(1, len(switch_entropies_before_mean) + 1)
         max_n = 10
@@ -347,7 +346,7 @@ class EntropySwitchesExperiment(Experiment):
 
     def samples_seen(self):
         return self._samples_seen
-    """
+
 
 class PerFieldEntropyExperiment(Experiment):
     # Just records the entropy of each field as well as overall.
