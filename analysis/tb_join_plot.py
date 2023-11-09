@@ -18,7 +18,7 @@ if __name__ == "__main__":
     # Split up files by model type
     files_split = defaultdict(list)
     for f in files:
-        model_type = f.split("_")[1:4]
+        model_type = f.split("_")[2:5]
         model_type = f"{model_type[0]}-{model_type[1]}.{model_type[2]}"
         files_split[model_type].append(f)
 
@@ -34,9 +34,9 @@ if __name__ == "__main__":
 
     # Plot all models
     fig, ax = plt.figure(), plt.axes()
-    fig.set_size_inches(7, 4)
+    fig.set_size_inches(7, 5)
     for model_type, points in points_by_model.items():
-        ax.semilogx(*points_by_model[model_type], label=model_type)
+        ax.plot(*points_by_model[model_type], label=model_type)
 
     ax.legend()
     ax.set_xlabel("Step")
