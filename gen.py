@@ -97,11 +97,14 @@ class NextActionExperiment(GenerationExperiment):
     def stopping_criteria(self, context_length: int = 0, total_length: int = 0):
         return StoppingCriteriaList(
             [
-                MaxLengthCriteria(max_length=context_length + 3),
+                MaxLengthCriteria(max_length=context_length + len(self.vocab.field_names(include_special=False))),
             ]
         )
 
     def eval_generation(self, output_df=None, label_df=None, output_tokens=None, label_tokens=None):
+        # Rename METRIC_NAME to METRIC_NAME|REPORT_NAME
+        output_df = output_df.rename(columns={METRIC_NAME_COL: "METRIC_NAME|REPORT_NAME"})
+
         # Get the next action
         next_action = label_df.iloc[0]
         # Get the predicted next action
@@ -264,11 +267,11 @@ class ScoringExperiment(GenerationExperiment):
             model_type = f"{model_type[0]}-{model_type[1]}.{model_type[2]}"
             rows.append({
                 ("", "Model"): model_type,
-                ("ROUGE-1", "METRIC_NAME"): np.mean(model_data["rouge_scores_by_field"]["METRIC_NAME"]),
+                ("ROUGE-1", "METRIC_NAME"): np.mean(model_data["rouge_scores_by_field"]["METRIC_NAME|REPORT_NAME"]),
                 ("ROUGE-1", "PAT_ID"): np.mean(model_data["rouge_scores_by_field"]["PAT_ID"]),
-                ("ROUGE-1", "ACCESS_TIME"): np.mean(model_data["rouge_scores_by_field"]["ACCESS_TIME"]),
+                ("ROUGE-1", "ACCESS_TIME"): np.mean(model_data["rouge_scores_by_field"]["ACCESS_TIME|REPORT_NAME"]),
                 ("ROUGE-1", "All"): np.mean(model_data["rouge_scores_by_field"]["All"]),
-                ("ROUGE-L", "METRIC_NAME"): np.mean(model_data["rouge_L_scores_by_field"]["METRIC_NAME"]),
+                ("ROUGE-L", "METRIC_NAME"): np.mean(model_data["rouge_L_scores_by_field"]["METRIC_NAME|REPORT_NAME"]),
                 ("ROUGE-L", "PAT_ID"): np.mean(model_data["rouge_L_scores_by_field"]["PAT_ID"]),
                 ("ROUGE-L", "ACCESS_TIME"): np.mean(model_data["rouge_L_scores_by_field"]["ACCESS_TIME"]),
                 ("ROUGE-L", "All"): np.mean(model_data["rouge_L_scores_by_field"]["All"]),
@@ -442,15 +445,16 @@ if __name__ == "__main__":
             else:
                 eos_index = nonzeros[0][0].item() - 1
 
-            row_count = (eos_index - 1) // row_len
+            row_count = eos_index // row_len
             min_rows = exp.window_size()
             if 0 < min_rows <= 1:
                 min_rows = int(1 / min_rows)
 
-            if row_count <= min_rows:  # Not applicable
+            if row_count <= min_rows or row_count <= 2:  # Not applicable
                 continue
 
-            for i in range(min_rows, row_count):
+
+            for i in range(min_rows, row_count - 1):
                 window_size = i * row_len
 
                 # Copy the labels, and zero out past the window length.

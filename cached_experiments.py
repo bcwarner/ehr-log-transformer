@@ -440,22 +440,22 @@ class PerFieldEntropyExperiment(Experiment):
         fig, ax = plt.gcf(), plt.gca()
         width = 0.1
         field_labels = ["METRIC_NAME", "PAT_ID", "ACCESS_TIME"]
-        field_labels_aware = field_labels + ["USER_ID"]
+        field_labels_aware = field_labels# + ["USER_ID"]
+        field_labels_type = ["METRIC_NAME|REPORT_NAME", "PAT_ID", "ACCESS_TIME"]#, "USER_ID"]
         range = np.arange(len(field_labels_aware))
         max_ht = 0
         sorted_keys = sorted(self.field_entropies.keys())
         for idx, key in enumerate(sorted_keys):
             key_nice = key.replace("entropy-", "").replace("_", ".").replace(".csv", "")
-            if "USER_ID" in self.field_entropies[key].keys():
-                hts = [2 ** np.mean(self.field_entropies[key][k][1]) for k in field_labels_aware]
+            if field_labels_type[0] in self.field_entropies[key].keys():
+                hts = [2 ** np.mean(self.field_entropies[key][k][1]) for k in field_labels_type]
                 max_ht = max(max_ht, max(hts))
-                key_nice += " (PA)"
                 rects = ax.barh(range + (idx * width), height=width, width=hts, label=key_nice)
                 ax.bar_label(rects, fmt="%.4f")
             else:
-                hts = [2 ** np.mean(self.field_entropies[key][k][1]) for k in field_labels]
+                hts = [2 ** np.mean(self.field_entropies[key][k][1]) for k in field_labels_aware]
                 max_ht = max(max_ht, max(hts))
-                rects = ax.barh(range[:-1] + (idx * width), height=width, width=hts, label=key_nice)
+                rects = ax.barh(range + (idx * width), height=width, width=hts, label=key_nice)
                 ax.bar_label(rects, fmt="%.4f")
 
         ax.set_xlim(0, 1.25 * max_ht)
@@ -537,7 +537,7 @@ if __name__ == "__main__":
         os.path.join(path_prefix, config["audit_log_path"])
     )
 
-    def dispatch_map(provider):
+    def dispatch_map(provider, prov_type):
         # Double check that the audit log is non-empty
         log_path = os.path.normpath(os.path.join(data_path, provider, config["audit_log_file"]))
         if not os.path.exists(log_path) or os.path.getsize(log_path) == 0:
@@ -559,7 +559,9 @@ if __name__ == "__main__":
                     if "USER_ID" in first_line:
                         provider_aware_df.append(file)
                     else:
-                        provider_unaware_df.append(file)
+                        # Make sure it's the right provider_type
+                        if prov_type in file:
+                            provider_unaware_df.append(file)
 
         # Load the provider aware and provider unaware dataframes as desired.
         if requirements["provider_aware"]:
@@ -582,9 +584,22 @@ if __name__ == "__main__":
         return results
 
     # Dispatch jobs for each proivder in the directory
-    providers = os.listdir(data_path)
+    # Load the user ID list, and filter out the providers that are not of the given type.
+    user_id_df = pd.read_csv(
+        os.path.normpath(
+            os.path.join(path_prefix, config["user_id_list"])
+        )
+    )
+
+    # Filter out
+
+    # Filter out PROV_TYPEs that are not APP or Attending
+    user_id_df = user_id_df[user_id_df["PROV_TYPE"].isin(["APP", "Attending"])]
+    providers = user_id_df["USER_ID"].tolist()
+    prov_types = [user_id_df[user_id_df["USER_ID"] == p]["PROV_TYPE"].tolist()[0] for p in providers]
+
     exp_results = joblib.Parallel(n_jobs=-1 if not args.debug else 1, verbose=2)(
-        joblib.delayed(dispatch_map)(provider) for provider in providers
+        joblib.delayed(dispatch_map)(p, t) for p, t in zip(providers, prov_types)
     )
 
     # Iterate through each of the experiments and run the on_finish function.
