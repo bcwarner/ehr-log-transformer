@@ -347,6 +347,7 @@ class EntropySwitchesExperiment(Experiment):
     def samples_seen(self):
         return self._samples_seen
 
+
 class PerFieldEntropyExperiment(Experiment):
     # Just records the entropy of each field as well as overall.
     def __init__(self, config, path_prefix,
