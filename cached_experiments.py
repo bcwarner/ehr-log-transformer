@@ -556,11 +556,11 @@ if __name__ == "__main__":
                 with open(os.path.normpath(os.path.join(data_path, provider, file)), "r") as f:
                     first_line = f.readline()
                     if "USER_ID" in first_line:
-                        provider_aware_df.append(file)
-                    else:
                         # Make sure it's the right provider_type
                         if prov_type in file:
-                            provider_unaware_df.append(file)
+                            provider_aware_df.append(file)
+                    else:
+                        provider_unaware_df.append(file)
 
         # Load the provider aware and provider unaware dataframes as desired.
         if requirements["provider_aware"]:
