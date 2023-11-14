@@ -73,6 +73,9 @@ class EHRVocab:
             pickle.dump(res_dict, f)
 
     def field_to_token(self, field, value):
+        # Is there a dangling ' | ' at the end?
+        if value.strip().endswith("|"):
+            value = value.split("|")[0].strip()
         if value not in self.field_tokens[field]:
             # There's a few of these, TODO: Analyze these.
             return self.field_tokens["special"][self.unk_token]
