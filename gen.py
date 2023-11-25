@@ -269,7 +269,7 @@ class ScoringExperiment(GenerationExperiment):
                 ("", "Model"): model_type,
                 ("ROUGE-1", "METRIC_NAME"): np.mean(model_data["rouge_scores_by_field"]["METRIC_NAME|REPORT_NAME"]),
                 ("ROUGE-1", "PAT_ID"): np.mean(model_data["rouge_scores_by_field"]["PAT_ID"]),
-                ("ROUGE-1", "ACCESS_TIME"): np.mean(model_data["rouge_scores_by_field"]["ACCESS_TIME|REPORT_NAME"]),
+                ("ROUGE-1", "ACCESS_TIME"): np.mean(model_data["rouge_scores_by_field"]["ACCESS_TIME"]),
                 ("ROUGE-1", "All"): np.mean(model_data["rouge_scores_by_field"]["All"]),
                 ("ROUGE-L", "METRIC_NAME"): np.mean(model_data["rouge_L_scores_by_field"]["METRIC_NAME|REPORT_NAME"]),
                 ("ROUGE-L", "PAT_ID"): np.mean(model_data["rouge_L_scores_by_field"]["PAT_ID"]),

@@ -364,7 +364,7 @@ class PerFieldEntropyExperiment(Experiment):
         return {
             "logs": False,
             "provider_aware": True,
-            "provider_unaware": True,
+            "provider_unaware": False,
         }
 
     def map(self,
@@ -558,7 +558,7 @@ if __name__ == "__main__":
                     first_line = f.readline()
                     if "USER_ID" in first_line:
                         # Make sure it's the right provider_type
-                        if prov_type in file:
+                        if prov_type in file or "METRIC_NAME|REPORT_NAME" not in first_line:
                             provider_aware_df.append(file)
                     else:
                         provider_unaware_df.append(file)
@@ -566,9 +566,13 @@ if __name__ == "__main__":
         # Load the provider aware and provider unaware dataframes as desired.
         if requirements["provider_aware"]:
             provider_aware_df = {file: pd.read_csv(os.path.normpath(os.path.join(data_path, provider, file)), sep=",") for file in provider_aware_df}
+        else:
+            provider_aware_df = {}
 
         if requirements["provider_unaware"]:
             provider_unaware_df = {file: pd.read_csv(os.path.normpath(os.path.join(data_path, provider, file)), sep=",") for file in provider_unaware_df}
+        else:
+            provider_unaware_df = {}
 
         # Iterate through each of the experiments and run the map function.
         results = {}

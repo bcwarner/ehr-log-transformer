@@ -14,11 +14,11 @@ if __name__ == "__main__":
     args = p.parse_args()
 
     # Get all csv files in the directory
-    files = [f for f in os.listdir(os.path.join(os.getcwd(), "results")) if ("train" in f)]
+    files = [f for f in os.listdir(os.path.join(os.getcwd(), "results")) if (".csv" in f)]
     # Split up files by model type
     files_split = defaultdict(list)
     for f in files:
-        model_type = f.split("_")[2:5]
+        model_type = f.split("_")[0:3]
         model_type = f"{model_type[0]}-{model_type[1]}.{model_type[2]}"
         files_split[model_type].append(f)
 
