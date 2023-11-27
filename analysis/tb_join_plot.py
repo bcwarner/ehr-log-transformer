@@ -30,13 +30,15 @@ if __name__ == "__main__":
             dfs.append(pd.read_csv(os.path.join(os.getcwd(), "results", fname)))
         df = pd.concat(dfs, ignore_index=True)
         df = df.groupby("Step").last().reset_index()
-        points_by_model[model_type] = [df["Step"].values, np.exp2(df["Value"].ewm(alpha=args.alpha).mean().values)]
+        points_by_model[model_type] = [df["Step"].values, np.exp(df["Value"].ewm(alpha=args.alpha).mean().values)]
 
     # Plot all models
     fig, ax = plt.figure(), plt.axes()
     fig.set_size_inches(7, 5)
+    xmax = min([x[0][-1] for x in points_by_model.values()])
     for model_type, points in points_by_model.items():
-        ax.plot(*points_by_model[model_type], label=model_type)
+        points = [x for x in zip(*filter(lambda x: x[0] <= xmax, zip(*points)))]
+        ax.plot(*points, label=model_type)
 
     ax.legend()
     ax.set_xlabel("Step")

@@ -448,12 +448,12 @@ class PerFieldEntropyExperiment(Experiment):
         for idx, key in enumerate(sorted_keys):
             key_nice = key.replace("entropy-", "").replace("_", ".").replace(".csv", "")
             if field_labels_type[0] in self.field_entropies[key].keys():
-                hts = [2 ** np.mean(self.field_entropies[key][k][1]) for k in field_labels_type]
+                hts = [np.exp(np.mean(self.field_entropies[key][k][1])) for k in field_labels_type]
                 max_ht = max(max_ht, max(hts))
                 rects = ax.barh(range + (idx * width), height=width, width=hts, label=key_nice)
                 ax.bar_label(rects, fmt="%.4f")
             else:
-                hts = [2 ** np.mean(self.field_entropies[key][k][1]) for k in field_labels_aware]
+                hts = [np.exp(np.mean(self.field_entropies[key][k][1])) for k in field_labels_aware]
                 max_ht = max(max_ht, max(hts))
                 rects = ax.barh(range + (idx * width), height=width, width=hts, label=key_nice)
                 ax.bar_label(rects, fmt="%.4f")
