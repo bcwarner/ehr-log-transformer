@@ -157,7 +157,7 @@ if __name__ == "__main__":
     # Provider => row => field => entropy
     whole_set_entropy_map = defaultdict(lambda:
                                         defaultdict(lambda:
-                                                    {"METRIC_NAME": pd.NA, "PAT_ID": pd.NA, "ACCESS_TIME": pd.NA, "USER_ID": pd.NA})
+                                                    {"METRIC_NAME|REPORT_NAME": pd.NA, "PAT_ID": pd.NA, "ACCESS_TIME": pd.NA, "USER_ID": pd.NA})
                                         )
 
     cur_provider = None
@@ -214,7 +214,8 @@ if __name__ == "__main__":
             output = model(input_ids.to(device), labels=labels.to(device), return_dict=True)
             loss = output.loss.cpu().numpy()
 
-            for i in range(1, row_count - 1):
+            # Note: this works because row_len evenly divides the token count.
+            for i in range(1, row_count):
                 #input_ids_start = i * row_len
                 #input_ids_end = input_ids_start + row_len
                 #input_ids_end_extra = input_ids_end + row_len
