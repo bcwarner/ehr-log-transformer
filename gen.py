@@ -22,7 +22,7 @@ from model.model import EHRAuditGPT2, EHRAuditRWKV, EHRAuditLlama
 from model.modules import EHRAuditPretraining, EHRAuditDataModule
 from model.data import timestamp_space_calculation
 from model.vocab import EHRVocab, EHRAuditTokenizer, EHRAuditLogitsProcessor
-import tikzplotlib
+#import tikzplotlib
 import numpy as np
 import evaluate
 
