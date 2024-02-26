@@ -442,6 +442,7 @@ class PerFieldEntropyExperiment(Experiment):
         field_labels = ["METRIC_NAME", "PAT_ID", "ACCESS_TIME"]
         field_labels_aware = field_labels# + ["USER_ID"]
         field_labels_type = ["METRIC_NAME|REPORT_NAME", "PAT_ID", "ACCESS_TIME"]#, "USER_ID"]
+        field_labels_type_print = ["Action Name", "Patient ID", "Access Time"]#, "User ID"]
         range = np.arange(len(field_labels_aware))
         max_ht = 0
         sorted_keys = sorted(self.field_entropies.keys())
@@ -453,18 +454,22 @@ class PerFieldEntropyExperiment(Experiment):
                 rects = ax.barh(range + (idx * width), height=width, width=hts, label=key_nice)
                 ax.bar_label(rects, fmt="%.4f")
             else:
-                hts = [np.exp(np.mean(self.field_entropies[key][k][1])) for k in field_labels_aware]
-                max_ht = max(max_ht, max(hts))
-                rects = ax.barh(range + (idx * width), height=width, width=hts, label=key_nice)
-                ax.bar_label(rects, fmt="%.4f")
+                pass
+                # hts = [np.exp(np.mean(self.field_entropies[key][k][1])) for k in field_labels_aware]
+                # max_ht = max(max_ht, max(hts))
+                # rects = ax.barh(range + (idx * width), height=width, width=hts, label=key_nice)
+                # ax.bar_label(rects, fmt="%.4f")
 
         ax.set_xlim(0, 1.25 * max_ht)
-        ax.set_yticks(range + (width * model_count) / 2, field_labels_aware)
+        ax.set_yticks(range + (width * model_count) / 2, field_labels_type_print)
         ax.set_xlabel("Perplexity")
         ax.set_title("Perplexity by Field")
         fig.tight_layout()
 
-        plt.legend()
+        # Reverse the legend order
+        handles, labels = ax.get_legend_handles_labels()
+        ax.legend(handles[::-1], labels[::-1], title="Model")
+
         plt.savefig(
             os.path.normpath(
                 os.path.join(

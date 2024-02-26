@@ -30,6 +30,7 @@ import evaluate
 METRIC_NAME_COL = 0
 PAT_ID_COL = 1
 ACCESS_TIME_COL = 2
+USER_ID_COL = 3
 
 class GenerationExperiment:
     def __init__(
@@ -110,7 +111,7 @@ class NextActionExperiment(GenerationExperiment):
         # Get the predicted next action
         predicted_next_action = output_df.iloc[0]
         # Check if the predicted next action is correct
-        for x in [METRIC_NAME_COL, PAT_ID_COL, ACCESS_TIME_COL]:
+        for x in [METRIC_NAME_COL, PAT_ID_COL, ACCESS_TIME_COL, USER_ID_COL]:
             if next_action[x] == predicted_next_action[x]:
                 self.correct_by_field[x] += 1
         if np.all(next_action == predicted_next_action):
@@ -142,6 +143,7 @@ class NextActionExperiment(GenerationExperiment):
         metric_correct_by_model = defaultdict(int)
         pat_id_correct_by_model = defaultdict(int)
         access_time_correct_by_model = defaultdict(int)
+        user_id_correct_by_model = defaultdict(int)
         total_correct_by_model = defaultdict(int)
 
         # Convert to a LaTeX table
@@ -160,6 +162,7 @@ class NextActionExperiment(GenerationExperiment):
             metric_correct_by_model[model_type] = model_data["correct_by_field"][METRIC_NAME_COL]
             pat_id_correct_by_model[model_type] = model_data["correct_by_field"][PAT_ID_COL]
             access_time_correct_by_model[model_type] = model_data["correct_by_field"][ACCESS_TIME_COL]
+            user_id_correct_by_model[model_type] = model_data["correct_by_field"][USER_ID_COL]
             total_correct_by_model[model_type] = model_data["total_correct"]
 
             rows.append({
@@ -168,6 +171,7 @@ class NextActionExperiment(GenerationExperiment):
                 "METRIC_NAME Accuracy": metric_correct_by_model[model_type] / total_seen_by_model[model_type],
                 "PAT_ID Accuracy": pat_id_correct_by_model[model_type] / total_seen_by_model[model_type],
                 "ACCESS_TIME Accuracy": access_time_correct_by_model[model_type] / total_seen_by_model[model_type],
+                "USER_ID Accuracy": user_id_correct_by_model[model_type] / total_seen_by_model[model_type],
                 "Total Accuracy": total_correct_by_model[model_type] / total_seen_by_model[model_type],
             })
         df = pd.DataFrame(rows)
@@ -270,11 +274,8 @@ class ScoringExperiment(GenerationExperiment):
                 ("ROUGE-1", "METRIC_NAME"): np.mean(model_data["rouge_scores_by_field"]["METRIC_NAME|REPORT_NAME"]),
                 ("ROUGE-1", "PAT_ID"): np.mean(model_data["rouge_scores_by_field"]["PAT_ID"]),
                 ("ROUGE-1", "ACCESS_TIME"): np.mean(model_data["rouge_scores_by_field"]["ACCESS_TIME"]),
+                ("ROUGE-1", "USER_ID"): np.mean(model_data["rouge_scores_by_field"]["USER_ID"]),
                 ("ROUGE-1", "All"): np.mean(model_data["rouge_scores_by_field"]["All"]),
-                ("ROUGE-L", "METRIC_NAME"): np.mean(model_data["rouge_L_scores_by_field"]["METRIC_NAME|REPORT_NAME"]),
-                ("ROUGE-L", "PAT_ID"): np.mean(model_data["rouge_L_scores_by_field"]["PAT_ID"]),
-                ("ROUGE-L", "ACCESS_TIME"): np.mean(model_data["rouge_L_scores_by_field"]["ACCESS_TIME"]),
-                ("ROUGE-L", "All"): np.mean(model_data["rouge_L_scores_by_field"]["All"]),
             })
         df = pd.DataFrame(rows, columns=rows[0].keys())
         df = df.sort_values(by=[("", "Model")], ascending=False)
