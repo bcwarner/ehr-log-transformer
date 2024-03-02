@@ -267,20 +267,24 @@ class EHRAuditDataModule(pl.LightningDataModule):
         torch.manual_seed(config["random_seed"])
         self.seed = config["random_seed"]
 
-        # Concatenate the datasets together. This is done differently than the mainline branch.
-        self.cdsets = ConcatDataset(datasets)
-        # Split the dataset into train, val, test
-        train_indices, val_indices, test_indices = torch.utils.data.random_split(
-            range(len(self.cdsets)),
-            [
-                self.config["train_split"],
-                self.config["val_split"],
-                1 - self.config["train_split"] - self.config["val_split"],
-            ],
-        )
-        self.train_dataset = Subset(self.cdsets, train_indices)
-        self.val_dataset = Subset(self.cdsets, val_indices)
-        self.test_dataset = Subset(self.cdsets, test_indices)
+        # Split the datasets into train, val, and test by assigning random indices from each provider into
+        # each of the three sets.
+        self.train_sets, self.val_sets, self.test_sets = [], [], []
+        for dataset in datasets:
+            train_indices, val_indices, test_indices = torch.utils.data.random_split(
+                range(len(dataset)),
+                [
+                    self.config["train_split"],
+                    self.config["val_split"],
+                    1 - self.config["train_split"] - self.config["val_split"],
+                ],
+            )
+            self.train_sets.append(Subset(dataset, train_indices))
+            self.val_sets.append(Subset(dataset, val_indices))
+            self.test_sets.append(Subset(dataset, test_indices))
+        self.train_dataset = ConcatDataset(self.train_sets)
+        self.val_dataset = ConcatDataset(self.val_sets)
+        self.test_dataset = ConcatDataset(self.test_sets)
         self.num_workers = 2 if not self.debug else 1  # os.cpu_count()
         print(f"Using {self.num_workers} workers for data loading.")
         print(
