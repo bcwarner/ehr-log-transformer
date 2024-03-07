@@ -139,7 +139,8 @@ if __name__ == "__main__":
     model.to(device)
     model_name = "-".join(model_list[model_idx].split(os.sep)[0:2])
 
-    comb_subset = ConcatDataset([dm.train_dataset])#, dm.val_dataset, dm.test_dataset])
+    comb_subset = dm.all_datasets
+    start = len(dm.train_dataset)
 
     dl = torch.utils.data.DataLoader(
         comb_subset,
@@ -179,28 +180,20 @@ if __name__ == "__main__":
             #labels_c[:, :] = -100
 
             # Using the batch index get the dataset that contains it.
-            cont_dataset = dm.train_dataset
-            ds_offset = 0
-            #if batch_idx >= len(dm.val_dataset):# + len(dm.train_dataset):
-            #    cont_dataset = dm.test_dataset
-            #    ds_offset = len(dm.val_dataset)# + len(dm.train_dataset)
-            #elif batch_idx >= len(dm.train_dataset):
-            #    cont_dataset = dm.val_dataset
-            #    ds_offset = len(dm.train_dataset)
-            # Bisect the dataset
-            dset_idx = bisect.bisect_right(cont_dataset.cumulative_sizes, batch_idx - ds_offset)
-            dset: Subset = cont_dataset.datasets[dset_idx].dataset
-            dset_start_idx = (cont_dataset.cumulative_sizes[dset_idx - 1] if dset_idx > 0 else 0) + ds_offset
-            provider = dset.provider
+            dset_idx = bisect.bisect_right(comb_subset.cumulative_sizes, batch_idx)
+            dset_start_idx = comb_subset.cumulative_sizes[dset_idx - 1] if dset_idx > 0 else 0
+            dset = comb_subset.datasets[dset_idx]
+            provider = dset.dataset.provider
+            dset_session_index = comb_subset.datasets[dset_idx].indices[batch_idx - dset_start_idx]
 
             ce_current = []
             row_len = len(vocab.field_ids) - 1  # Exclude special fields
             row_count = eos_index // row_len # No need to offset for eos
             if row_count <= 1:  # Not applicable
-                whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["METRIC_NAME|REPORT_NAME"] = pd.NA
-                whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["PAT_ID"] = pd.NA
-                whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["ACCESS_TIME"] = pd.NA
-                whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["USER_ID"] = pd.NA
+                whole_set_entropy_map[provider][dset.dataset.seqs_indices[dset_session_index][0]]["METRIC_NAME|REPORT_NAME"] = pd.NA
+                whole_set_entropy_map[provider][dset.dataset.seqs_indices[dset_session_index][0]]["PAT_ID"] = pd.NA
+                whole_set_entropy_map[provider][dset.dataset.seqs_indices[dset_session_index][0]]["ACCESS_TIME"] = pd.NA
+                whole_set_entropy_map[provider][dset.dataset.seqs_indices[dset_session_index][0]]["USER_ID"] = pd.NA
                 continue
 
             # NOTE: Next-token generation != next-row generation
@@ -212,10 +205,10 @@ if __name__ == "__main__":
                 pbar.set_postfix({"providers": len(providers_seen)})
 
             # Add a NA for the first row.
-            whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["METRIC_NAME|REPORT_NAME"] = pd.NA
-            whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["PAT_ID"] = pd.NA
-            whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["ACCESS_TIME"] = pd.NA
-            whole_set_entropy_map[provider][dset.seqs_indices[batch_idx - dset_start_idx][0]]["USER_ID"] = pd.NA
+            whole_set_entropy_map[provider][dset.dataset.seqs_indices[dset_session_index][0]]["METRIC_NAME|REPORT_NAME"] = pd.NA
+            whole_set_entropy_map[provider][dset.dataset.seqs_indices[dset_session_index][0]]["PAT_ID"] = pd.NA
+            whole_set_entropy_map[provider][dset.dataset.seqs_indices[dset_session_index][0]]["ACCESS_TIME"] = pd.NA
+            whole_set_entropy_map[provider][dset.dataset.seqs_indices[dset_session_index][0]]["USER_ID"] = pd.NA
 
             # Calculate the cross entropy
             output = model(input_ids.to(device), labels=labels.to(device), return_dict=True)
@@ -241,7 +234,7 @@ if __name__ == "__main__":
                 time_loss = loss[ACCESS_TIME_COL, i]
                 user_loss = loss[USER_ID_COL, i]
 
-                whole_row_idx = dset.seqs_indices[batch_idx - dset_start_idx][0] + i
+                whole_row_idx = dset.dataset.seqs_indices[dset_session_index][0] + i
                 # +1 to account for the first row being the header
 
                 whole_set_entropy_map[provider][whole_row_idx]["METRIC_NAME|REPORT_NAME"] = metric_loss
@@ -267,5 +260,5 @@ if __name__ == "__main__":
                 if not entropy_df.loc[start, :].isna().all():
                     raise ValueError(f"First value is not NA for sequence range {start}:{stop}.")
 
-        entropy_df.to_csv(os.path.normpath(os.path.join(prov_path, f"entropy2-train-{model_name}.csv")))
+        entropy_df.to_csv(os.path.normpath(os.path.join(prov_path, f"entropy2-{model_name}.csv")))
 
