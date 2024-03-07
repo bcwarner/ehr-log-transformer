@@ -13,14 +13,14 @@ import scipy.stats
 import torch
 import yaml
 from matplotlib.axes import Axes
-from torch.utils.data import DataLoader, SequentialSampler, BatchSampler, ConcatDataset
+from torch.utils.data import DataLoader, SequentialSampler, BatchSampler, ConcatDataset, Subset
 from tqdm import tqdm
 from tabulate import tabulate
 from matplotlib import pyplot as plt
 
 from model.model import EHRAuditGPT2, EHRAuditRWKV, EHRAuditLlama
 from model.modules import EHRAuditPretraining, EHRAuditDataModule, collate_fn, worker_fn
-from model.data import timestamp_space_calculation
+from model.data import timestamp_space_calculation, EHRAuditDataset
 from model.vocab import EHRVocab, EHRAuditTokenizer
 import numpy as np
 
@@ -85,7 +85,7 @@ if __name__ == "__main__":
     model_list = []
     for root, dirs, files in os.walk(model_paths):
         # If there's a .bin file, it's a model
-        if any([file.endswith(".bin") for file in files]):
+        if any([file.endswith(".safetensors") for file in files]):
             # Append the last three directories to the model list
             model_list.append(os.path.join(*root.split(os.sep)[-3:]))
 
@@ -139,9 +139,7 @@ if __name__ == "__main__":
     model.to(device)
     model_name = "-".join(model_list[model_idx].split(os.sep)[0:2])
 
-    all_datasets = dm.cdsets
-    subset_indices = dm.val_dataset.indices + dm.test_dataset.indices
-    comb_subset = torch.utils.data.Subset(all_datasets, subset_indices)
+    comb_subset = ConcatDataset([dm.train_dataset])#, dm.val_dataset, dm.test_dataset])
 
     dl = torch.utils.data.DataLoader(
         comb_subset,
@@ -162,7 +160,7 @@ if __name__ == "__main__":
 
     cur_provider = None
     providers_seen = set()
-    pbar = tqdm(zip(subset_indices, dl), total=len(dl))
+    pbar = tqdm(enumerate(dl), total=len(dl))
     for batch_idx, batch in pbar:
         input_ids, labels = batch
 
@@ -180,10 +178,19 @@ if __name__ == "__main__":
             # Set the labels to -100, zero out the input_ids
             #labels_c[:, :] = -100
 
-            # Get the index of the current row in the whole df
-            dset_idx = bisect.bisect_right(all_datasets.cumulative_sizes, batch_idx)
-            dset_start_idx = all_datasets.cumulative_sizes[dset_idx - 1] if dset_idx > 0 else 0
-            dset = all_datasets.datasets[dset_idx]
+            # Using the batch index get the dataset that contains it.
+            cont_dataset = dm.train_dataset
+            ds_offset = 0
+            #if batch_idx >= len(dm.val_dataset):# + len(dm.train_dataset):
+            #    cont_dataset = dm.test_dataset
+            #    ds_offset = len(dm.val_dataset)# + len(dm.train_dataset)
+            #elif batch_idx >= len(dm.train_dataset):
+            #    cont_dataset = dm.val_dataset
+            #    ds_offset = len(dm.train_dataset)
+            # Bisect the dataset
+            dset_idx = bisect.bisect_right(cont_dataset.cumulative_sizes, batch_idx - ds_offset)
+            dset: Subset = cont_dataset.datasets[dset_idx].dataset
+            dset_start_idx = (cont_dataset.cumulative_sizes[dset_idx - 1] if dset_idx > 0 else 0) + ds_offset
             provider = dset.provider
 
             ce_current = []
@@ -260,5 +267,5 @@ if __name__ == "__main__":
                 if not entropy_df.loc[start, :].isna().all():
                     raise ValueError(f"First value is not NA for sequence range {start}:{stop}.")
 
-        entropy_df.to_csv(os.path.normpath(os.path.join(prov_path, f"entropy-{model_name}.csv")))
+        entropy_df.to_csv(os.path.normpath(os.path.join(prov_path, f"entropy2-train-{model_name}.csv")))
 

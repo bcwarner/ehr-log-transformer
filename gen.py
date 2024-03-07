@@ -355,7 +355,7 @@ if __name__ == "__main__":
     model_list = []
     for root, dirs, files in os.walk(model_paths):
         # If there's a .bin file, it's a model
-        if any([file.endswith(".bin") for file in files]):
+        if any([file.endswith(".safetensors") for file in files]):
             # Append the last three directories to the model list
             model_list.append(os.path.join(*root.split(os.sep)[-3:]))
 
