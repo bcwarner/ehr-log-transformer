@@ -14,7 +14,6 @@ from matplotlib.axes import Axes
 from pandas import DataFrame
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from tabulate import tabulate
 from matplotlib import pyplot as plt
 from transformers import BeamSearchScorer, StoppingCriteriaList, MaxLengthCriteria, LogitsProcessorList
 
