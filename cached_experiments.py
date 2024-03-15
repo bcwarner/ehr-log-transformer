@@ -261,7 +261,7 @@ class EntropySwitchesExperiment(Experiment):
         res_path = os.path.normpath(
             os.path.join(self.path_prefix, self.config["results_path"])
         )
-        plt.savefig(os.path.normpath(os.path.join(res_path, "entropy_switches.svg")))
+        plt.savefig(os.path.normpath(os.path.join(res_path, "entropy_switches.pdf")))
 
         switch_entropies_before_all = []
         switch_entropies_after_all = []
@@ -284,7 +284,7 @@ class EntropySwitchesExperiment(Experiment):
         plt.title("Entropy of Switches vs. Non-switches")
         plt.savefig(
             os.path.normpath(
-                os.path.join(res_path, "entropy_switches_vs_non_switches.svg")
+                os.path.join(res_path, "entropy_switches_vs_non_switches.pdf")
             )
         )
 
@@ -307,7 +307,7 @@ class EntropySwitchesExperiment(Experiment):
         plt.title("Entropy of Switches vs. Non-switches")
         plt.savefig(
             os.path.normpath(
-                os.path.join(res_path, "entropy_switches_vs_non_switches_cdf.svg")
+                os.path.join(res_path, "entropy_switches_vs_non_switches_cdf.pdf")
             )
         )
 
@@ -330,19 +330,19 @@ class EntropySwitchesExperiment(Experiment):
         plt.title("Log entropy of Switches vs. Non-switches")
         plt.savefig(
             os.path.normpath(
-                os.path.join(res_path, "log_entropy_switches_vs_non_switches_cdf.svg")
+                os.path.join(res_path, "log_entropy_switches_vs_non_switches_cdf.pdf")
             )
         )
 
         # Calculate the p-value that the distributions are the same using scipy
-        _, p_before = scipy.stats.ttest_ind(
-            self.non_switch_entropies, switch_entropies_before_all
-        )
-        _, p_after = scipy.stats.ttest_ind(
-            self.non_switch_entropies, switch_entropies_after_all
-        )
-        print(f"Before t-test p-value: {p_before}")
-        print(f"After t-test p-value: {p_after}")
+        # _, p_before = scipy.stats.ttest_ind(
+        #     self.non_switch_entropies, switch_entropies_before_all
+        # )
+        # _, p_after = scipy.stats.ttest_ind(
+        #     self.non_switch_entropies, switch_entropies_after_all
+        # )
+        # print(f"Before t-test p-value: {p_before}")
+        # print(f"After t-test p-value: {p_after}")
 
     def samples_seen(self):
         return self._samples_seen
@@ -376,6 +376,9 @@ class PerFieldEntropyExperiment(Experiment):
         # field => model => entropy count, average, std
         results = defaultdict(lambda: defaultdict(list))
         for k, df in {**provider_aware_df, **provider_unaware_df}.items():
+            # Keep only the val_test items
+            df = df[df["set"] == "val_test"]
+            df = df.drop(columns=["set"])
             # Iterate each of the fields in the df and aggregate the entropy.
             for field in df.columns:
                 results[field][k] = (df[field].count(), df[field].mean())
@@ -447,7 +450,7 @@ class PerFieldEntropyExperiment(Experiment):
         max_ht = 0
         sorted_keys = sorted(self.field_entropies.keys())
         for idx, key in enumerate(sorted_keys):
-            key_nice = key.replace("entropy-", "").replace("_", ".").replace(".csv", "")
+            key_nice = key.replace("entropy2-", "").replace("_", ".").replace(".csv", "")
             if field_labels_type[0] in self.field_entropies[key].keys():
                 hts = [np.exp(np.mean(self.field_entropies[key][k][1])) for k in field_labels_type]
                 max_ht = max(max_ht, max(hts))
@@ -557,7 +560,7 @@ if __name__ == "__main__":
 
         # Iterate through all files prefixed with entropy, and split them into lists of provider aware and provider unaware.
         for file in os.listdir(os.path.normpath(os.path.join(data_path, provider))):
-            if file.startswith("entropy"):
+            if file.startswith("entropy2") and not file.startswith("entropy2-train"):
                 # Read the first line of the file to determine if it's provider aware or not.
                 with open(os.path.normpath(os.path.join(data_path, provider, file)), "r") as f:
                     first_line = f.readline()
